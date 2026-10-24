@@ -2,13 +2,13 @@
  * 领地档案 · 加载器
  *
  * 酒馆里只导入这一个文件。它负责：
- *   ① 拉 manifest.json（三源：jsDelivr / GitHub raw / GitHub API）
- *   ② 逐个拉模块，每个都算 SHA-256 比对
- *   ③ 全部校验通过才按序执行
- *   ④ 任何失败 → 回退上次成功的缓存
- *   ⑤ 状态挂到 window.__fiefLoader，面板「关于」页可查
+ *   1. 拉 manifest.json（jsDelivr / GitHub raw 依次试）
+ *   2. 逐个拉模块，每个都算 SHA-256 比对
+ *   3. 全部校验通过才按序执行
+ *   4. 任何失败 -> 回退上次成功的缓存
+ *   5. 状态挂在 window.__fiefLoader，控制台可查
  *
- * 改代码不用重新导入这个文件；改完推仓库，刷新页面即可。
+ * 改代码不用重新导入这个文件。改完推仓库，刷新页面即可。
  * ========================================================================== */
 (() => {
   'use strict';
@@ -19,9 +19,9 @@
   const BRANCH = 'main';
 
   const SOURCES = [
-    // ① jsDelivr，国内通常最快
+    // jsDelivr，国内通常最快
     'https://cdn.jsdelivr.net/gh/' + OWNER + '/' + REPO + '@' + BRANCH + '/',
-    // ② GitHub raw
+    // GitHub raw
     'https://raw.githubusercontent.com/' + OWNER + '/' + REPO + '/' + BRANCH + '/',
   ];
 
@@ -67,27 +67,17 @@
   }
 
   async function sha256(bytes) {
-    if (globalThis.crypto && globalThis.crypto.subtle) {
-      return hex(await globalThis.crypto.subtle.digest('SHA-256', bytes));
+    const wc = (window && window.crypto) || (typeof crypto !== 'undefined' ? crypto : null);
+    if (wc && wc.subtle) {
+      return hex(await wc.subtle.digest('SHA-256', bytes));
     }
     // 没有 Web Crypto 就不做校验：宁可跑起来，也不要白屏
     log('没有 Web Crypto，跳过校验');
     return null;
   }
 
-  function withTimeout(promise, ms, what) {
-    return new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error(what + ' 超时（' + (ms / 1000) + ' 秒）')), ms);
-      promise.then(
-        (v) => { clearTimeout(t); resolve(v); },
-        (e) => { clearTimeout(t); reject(e); },
-      );
-    });
-  }
-
   /* ------------------------------------------------------- 缓存 */
   async function cacheOpen() {
-    // 从 window 取：脚本跑在 iframe 里时，globalThis 不一定是宿主窗口
     const cs = (window && window.caches) || (typeof caches !== 'undefined' ? caches : null);
     if (!cs || typeof cs.open !== 'function') return null;
     try { return await cs.open(CACHE_NAME); } catch (e) { return null; }
@@ -125,8 +115,10 @@
         const timer = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : null;
         let res;
         try {
-          res = await fetch(url, Object.assign({ cache: 'no-store', credentials: 'omit' },
-            ctl ? { signal: ctl.signal } : {}));
+          res = await fetch(url, Object.assign(
+            { cache: 'no-store', credentials: 'omit' },
+            ctl ? { signal: ctl.signal } : {},
+          ));
         } finally {
           if (timer) clearTimeout(timer);
         }
@@ -136,7 +128,7 @@
         state.source = base;
         return bytes;
       } catch (e) {
-        errs.push(url + ' → ' + (e && e.message ? e.message : String(e)));
+        errs.push(url + ' -> ' + (e && e.message ? e.message : String(e)));
       }
     }
     throw new Error('所有来源都失败：\n' + errs.join('\n'));
@@ -196,7 +188,8 @@
   }
 
   function execute(mod, text) {
-    // 用 <script> 注入而不是 new Function：保留 sourceURL，报错栈能指到对应模块
+    // 用 <script> 注入而不是 new Function：
+    // 保留 sourceURL，报错栈能指到对应模块
     const blob = new Blob([text + '\n//# sourceURL=fief-ledger/' + mod.path], { type: 'text/javascript' });
     const url = URL.createObjectURL(blob);
     return new Promise((resolve, reject) => {
