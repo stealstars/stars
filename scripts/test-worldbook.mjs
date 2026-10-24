@@ -1,98 +1,133 @@
 /**
- * 世界书模块测试：用真实的命定世界书跑解析
+ * 世界书解析测试
+ *
+ * 用真实的命定卡片 + 酒馆助手的真实接口形状（异步、字段叫 name）验证。
  */
 import fs from 'node:fs';
 
 let pass = 0, fail = 0;
 const ok = (n, v, e) => { if (v) { pass++; console.log('  OK   ' + n); } else { fail++; console.log('  FAIL ' + n + (e ? ' -> ' + e : '')); } };
 
-const win = { console };
-win.window = win;
+const CARD = JSON.parse(fs.readFileSync('D:\\223\\命定之诗与黄昏之歌v4.31.json', 'utf8'));
+const CODE = fs.readFileSync('D:\\223\\fief-ledger\\modules\\worldbook.js', 'utf8');
 
-const code = fs.readFileSync(new URL('../modules/worldbook.js', import.meta.url), 'utf8');
-new Function('window', 'console', code)(win, console);
+function makeWin(th) {
+  const w = { console: { log() {}, warn() {}, error() {} } };
+  w.window = w;
+  if (th) w.TavernHelper = th;
+  new Function('window', 'console', CODE)(w, w.console);
+  return w;
+}
 
-ok('模块安装到 window.__fiefBook', !!win.__fiefBook);
+/* 卡片里确实有这些条目 */
+const raw = Object.keys(CARD.data.character_book.entries).map((k) => CARD.data.character_book.entries[k]);
+console.log('卡片原始条目 ' + raw.length);
+ok('卡片有 597 条', raw.length === 597, String(raw.length));
 
-/* 把真实世界书塞进去 */
-const card = JSON.parse(fs.readFileSync('D:\\223\\命定之诗与黄昏之歌v4.31.json', 'utf8'));
-const entries = win.__fiefBook.normalize(card.data.character_book);
-console.log('  归一化条目 ' + entries.length + ' 条（空白条目已剔除）');
-ok('条目数 >= 580', entries.length >= 580, String(entries.length));
+/* ---------------- ① 酒馆助手异步形状 ---------------- */
+console.log('\n=== 酒馆助手（Promise + name 字段） ===');
+const thAsync = {
+  getWorldbookNames: () => ['命定之诗与黄昏之歌v4.3'],
+  getCharWorldbookNames: () => ({ primary: '命定之诗与黄昏之歌v4.3', additional: [] }),
+  getWorldbook: async (n) => (n === '命定之诗与黄昏之歌v4.3'
+    ? raw.map((e, i) => ({
+      uid: i,
+      name: e.comment,             // ← 关键：字段叫 name
+      content: e.content,
+      strategy: { type: e.constant ? 'constant' : 'selective', keys: e.key || [] },
+    }))
+    : []),
+};
+const w1 = makeWin(thAsync);
+ok('debug 能跑', (() => { try { w1.__fiefBook.debug(); return true; } catch (e) { return false; } })());
+const d1 = w1.__fiefBook.debug();
+ok('debug 报酒馆助手可用', d1.TavernHelper === true);
+ok('debug 报书名', d1.世界书名.length === 1, JSON.stringify(d1.世界书名));
+ok('debug 报能调 getWorldbook', d1.有getWorldbook === true);
 
-/* 拆标签 */
-const sp = win.__fiefBook.splitFactionTag('[本体][势力][诺斯加德联盟][城镇][林歌城]林歌城');
-ok('拆出势力名', sp && sp.faction === '诺斯加德联盟', sp && sp.faction);
-ok('拆出子标签', sp && sp.tags.join('/') === '城镇/林歌城', sp && sp.tags.join('/'));
-ok('拆出名字', sp && sp.name === '林歌城', sp && sp.name);
+const c1 = await w1.__fiefBook.scan(false);
+ok('异步扫到条目', c1.count > 500, String(c1.count));
+ok('异步读出 10 个势力', Object.keys(c1.factions).length === 10, String(Object.keys(c1.factions).length));
+ok('scan 返回 Promise', typeof w1.__fiefBook.scan(false).then === 'function');
+ok('scanSync 拿到缓存', w1.__fiefBook.scanSync().count === c1.count);
 
-const sp2 = win.__fiefBook.splitFactionTag('[本体][势力][奥古斯提姆帝国]翠庭城(快乐柠萌茶)');
-ok('无标签也能拆', sp2 && sp2.faction === '奥古斯提姆帝国', sp2 && sp2.faction);
-ok('剥掉作者签名', sp2 && sp2.name === '翠庭城', sp2 && sp2.name);
+const places1 = Object.keys(c1.factions).reduce((s, f) => s + c1.factions[f].places.length, 0);
+ok('拆出 206 个地点', places1 === 206, String(places1));
+console.log('  条目 ' + c1.count + '，势力 ' + Object.keys(c1.factions).length + '，地点 ' + places1);
 
-const sp3 = win.__fiefBook.splitFactionTag('[本体][势力][兽族联盟][鼠族王国][风信子城][主城区]主城区');
-ok('多层嵌套能拆', sp3 && sp3.faction === '兽族联盟', sp3 && sp3.faction);
-ok('多层嵌套名字对', sp3 && sp3.name === '主城区', sp3 && sp3.name);
+/* 逐个势力 */
+const EXPECT = {
+  诺斯加德联盟: 69, 兽族联盟: 27, 翼民圣国梵尼亚: 26, 奥古斯提姆帝国: 21,
+  精灵王庭: 20, 瓦伦蒂亚: 18, 伯伦斯法环: 10, 索伦蒂斯王国: 10, 萨赫拉联邦: 5, 永夜盟约: 0,
+};
+for (const [f, n] of Object.entries(EXPECT)) {
+  const got = c1.factions[f] ? c1.factions[f].places.length : -1;
+  ok(f + ' 有 ' + n + ' 处', got === n, String(got));
+}
 
-/* 规模识别 */
-ok('认出 规模: 大型城市', win.__fiefBook.placeScale('位置: X\n规模: 大型城市\n人口构成: 人类') === '大型城市');
-ok('认出 规模: 村庄', win.__fiefBook.placeScale('规模: 村庄') === '村庄');
-ok('总述没有规模', win.__fiefBook.placeScale('定位: 统治大陆东部平原\n疆域: 广阔') === '');
+/* 抽查一个地点 */
+const aug = c1.factions['奥古斯提姆帝国'];
+const cit = aug.places.find((p) => p.name === '翠庭城');
+ok('翠庭城被识别为地点', !!cit);
+if (cit) {
+  ok('翠庭城规模是大型城市', cit.scale === '大型城市', cit.scale);
+  ok('翠庭城有正文', cit.content.length > 100, String(cit.content.length));
+  ok('翠庭城有位置字段', !!cit.where, cit.where);
+}
 
-/* 建势力树 */
-const tree = win.__fiefBook.buildFactionTree(entries);
-const names = Object.keys(tree);
-ok('建出 10 个势力', names.length === 10, String(names.length));
+/* 总述不该被当成地点 */
+const augOverview = aug.overview.map((o) => o.name);
+ok('奥古斯提姆帝国总述没混进地点', aug.places.every((p) => p.scale || p.name !== '奥古斯提姆帝国'));
+console.log('  奥古斯提姆总述 ' + augOverview.length + ' 条：' + augOverview.slice(0, 4).join('、'));
 
-let total = 0;
-console.log('');
-console.log('=== 势力树 ===');
-names.sort((a, b) => tree[b].places.length - tree[a].places.length).forEach((f) => {
-  const t = tree[f];
-  total += t.places.length;
-  console.log('  ' + f.padEnd(12) + ' 地点 ' + String(t.places.length).padStart(3) + '   总述 ' + t.overview.length);
-});
-console.log('  地点合计 ' + total);
+/* ---------------- ② 同步返回也要能接 --------------- */
+console.log('\n=== 同步返回（旧实现） ===');
+const thSync = {
+  getWorldbookNames: () => ['命定之诗与黄昏之歌v4.3'],
+  getWorldbook: () => raw,
+};
+const c2 = await makeWin(thSync).__fiefBook.scan(false);
+ok('同步返回值也能扫到', c2.count > 500, String(c2.count));
+ok('同步结果势力数一致', Object.keys(c2.factions).length === 10);
 
-ok('地点总数 > 150', total > 150, String(total));
-ok('诺斯加德地点 > 40', tree['诺斯加德联盟'].places.length > 40, String(tree['诺斯加德联盟'] && tree['诺斯加德联盟'].places.length));
+/* ---------------- ③ 原生全局 --------------- */
+console.log('\n=== 原生全局 world_info ===');
+const w3 = { console: { log() {}, warn() {}, error() {} } };
+w3.window = w3;
+w3.world_info = CARD.data.character_book;
+new Function('window', 'console', CODE)(w3, w3.console);
+const c3 = await w3.__fiefBook.scan(false);
+ok('原生 world_info 能扫到', c3.count > 500, String(c3.count));
 
-/* 误判检查 */
-const bad = [];
-names.forEach((f) => tree[f].places.forEach((p) => {
-  if (/政治与社会|地理与治理|地理概览|分割线|派系|节庆|贵族|派阀/.test(p.name)) bad.push(f + '|' + p.name);
-  if (p.name === f) bad.push(f + '|(总述混入)');
-}));
-ok('无误判', bad.length === 0, bad.slice(0, 4).join(', '));
+/* ---------------- ④ 什么都没有 --------------- */
+console.log('\n=== 读不到时 ===');
+const w4 = { console: { log() {}, warn() {}, error() {} } };
+w4.window = w4;
+new Function('window', 'console', CODE)(w4, w4.console);
+const c4 = await w4.__fiefBook.scan(false);
+ok('不崩，返回 0 条', c4.count === 0, String(c4.count));
+ok('给出可读的错误', !!c4.err, c4.err);
+ok('debug 报酒馆助手不可用', w4.__fiefBook.debug().TavernHelper === false);
 
-/* 三家的地点确实找到了 */
-ok('瓦伦蒂亚有地点（原本被漏）', tree['瓦伦蒂亚'].places.length > 10, String(tree['瓦伦蒂亚'].places.length));
-ok('萨赫拉有地点（原本被漏）', tree['萨赫拉联邦'].places.length >= 5, String(tree['萨赫拉联邦'].places.length));
-ok('奥古斯提姆有地点（原本被漏）', tree['奥古斯提姆帝国'].places.length > 15, String(tree['奥古斯提姆帝国'].places.length));
+/* ---------------- ⑤ 拆名函数 --------------- */
+console.log('\n=== 标签拆分 ===');
+const w5 = makeWin(null);
+const sp = w5.__fiefBook.splitFactionTag;
+const a = sp('[本体][势力][诺斯加德联盟][城镇]灰岩镇');
+ok('带标签的拆出势力', a && a.faction === '诺斯加德联盟', JSON.stringify(a));
+ok('带标签的拆出地名', a && a.name === '灰岩镇', a && a.name);
+ok('带标签的保留 tags', a && a.tags.join('/') === '城镇', a && a.tags.join('/'));
 
-console.log('');
-console.log('=== 抽样：奥古斯提姆帝国（规模识别）===');
-tree['奥古斯提姆帝国'].places.slice(0, 12).forEach((p) => {
-  console.log('  ' + String(p.len).padStart(4) + ' 字  ' + p.name.padEnd(14) + ' | ' + (p.scale || '未记'));
-});
+const b = sp('[本体][势力][奥古斯提姆帝国]翠庭城');
+ok('裸地名也能拆', b && b.faction === '奥古斯提姆帝国' && b.name === '翠庭城', JSON.stringify(b));
 
-console.log('');
-console.log('=== 抽样：瓦伦蒂亚 ===');
-tree['瓦伦蒂亚'].places.slice(0, 10).forEach((p) => {
-  console.log('  ' + String(p.len).padStart(4) + ' 字  ' + p.name.padEnd(16) + ' | ' + (p.scale || '未记'));
-});
+const c = sp('[本体][势力][奥古斯提姆帝国]翠庭城(快乐柠萌茶)');
+ok('剥掉作者签名', c && c.name === '翠庭城', c && c.name);
 
-console.log('');
-console.log('=== 抽样：萨赫拉联邦 ===');
-tree['萨赫拉联邦'].places.forEach((p) => {
-  console.log('  ' + String(p.len).padStart(4) + ' 字  ' + p.name.padEnd(12) + ' | ' + (p.scale || '未记'));
-});
+const dd = sp('[本体][势力][兽族联盟][鼠族王国][风信子城][主城区]主城区');
+ok('多层嵌套拆得开', dd && dd.faction === '兽族联盟' && dd.tags.length === 3, JSON.stringify(dd && dd.tags));
 
-console.log('');
-console.log('=== 抽样：诺斯加德联盟前 10 ===');
-tree['诺斯加德联盟'].places.slice(0, 10).forEach((p) => {
-  console.log('  ' + String(p.len).padStart(4) + ' 字  ' + p.name.padEnd(14) + ' | ' + (p.scale || '未记'));
-});
+ok('非势力条目返回 null', sp('[本体][变量][mvu_update]变量更新规则') === null);
 
 console.log('\n' + (fail ? fail + ' 项失败 / ' + (fail + pass) : '全部通过 ✔  ' + pass + ' 项'));
 process.exit(fail ? 1 : 0);

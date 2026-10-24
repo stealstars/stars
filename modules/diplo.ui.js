@@ -30,6 +30,9 @@
     profile: null,      // 当前地点的 AI 档案
     busy: false,
     err: '',
+    ready: false,       // 世界书扫完了没有
+    scanning: false,
+    scanErr: '',
     mode: '',           // '' | 'ai'
     neighbour: [],      // 邻邦名列表（由主脚本塞进来）
   };
@@ -121,7 +124,52 @@
   function book() {
     var b = BOOK();
     if (!b) return null;
-    try { return b.scan(false); } catch (e) { return null; }
+    // scan 是异步的，这里只取已经扫完的结果；没扫完返回 null，界面画「读取中」
+    try { return b.scanSync(); } catch (e) { return null; }
+  }
+
+  /** 启动扫描，扫完重绘 */
+  function ensureScan() {
+    var b = BOOK();
+    if (!b) { S.ready = false; S.scanErr = '世界书模块没加载'; return; }
+    if (S.ready || S.scanning) return;
+    S.scanning = true;
+    S.scanErr = '';
+    try {
+      b.scan(false).then(function (c) {
+        S.scanning = false;
+        S.ready = !!(c && c.count);
+        S.scanErr = c && c.err ? c.err : '';
+        rerender(null);
+      }).catch(function (e) {
+        S.scanning = false;
+        S.ready = false;
+        S.scanErr = (e && e.message) || String(e);
+        rerender(null);
+      });
+    } catch (e) {
+      S.scanning = false;
+      S.ready = false;
+      S.scanErr = (e && e.message) || String(e);
+    }
+  }
+
+  /** 强制重扫 */
+  function rescan() {
+    var b = BOOK();
+    if (!b) return;
+    S.scanning = true; S.scanErr = ''; S.ready = false;
+    rerender(null);
+    b.scan(true).then(function (c) {
+      S.scanning = false;
+      S.ready = !!(c && c.count);
+      S.scanErr = c && c.err ? c.err : '';
+      rerender(null);
+    }).catch(function (e) {
+      S.scanning = false;
+      S.scanErr = (e && e.message) || String(e);
+      rerender(null);
+    });
   }
 
   /** 世界书里的势力，按地点数排序 */
@@ -518,14 +566,63 @@
   /* ------------------------------------------------------------ 总装 */
 
   function html() {
-    var c = book();
-
-    if (!c) {
+    var b = BOOK();
+    if (!b) {
       return '<div class="fl-dw-load"><b>世 界 书 模 块 未 加 载</b>'
         + '外交页需要 <code>modules/worldbook.js</code>。<br>'
         + '如果是刚更新，刷新一下页面。</div>';
     }
 
+    // 还没开始扫 → 起一个，先把界面画成「读取中」
+    if (!S.ready && !S.scanning && !S.scanErr) { ensureScan(); }
+
+    if (S.scanning) {
+      return '<div class="fl-dw-load"><b>读 取 世 界 书</b>'
+        + '正在从酒馆里取世界书条目<i>.</i><i>.</i><i>.</i></div>';
+    }
+
+    var c = book();
+
+    if (!c || !c.count) {
+      var d = {};
+      try { d = b.debug(); } catch (e) { d = { 错误: String(e && e.message) }; }
+      var names = Array.isArray(d.世界书名) ? d.世界书名 : [];
+      var lines = [
+        ['酒馆助手可用', d.TavernHelper ? '是' : '否'],
+        ['能调 getWorldbook', d.有getWorldbook ? '是' : '否'],
+        ['拿到的世界书名', names.length ? names.join('、') : '（一个也没有）'],
+        ['角色卡绑定', (function () {
+          var v = d.角色卡世界书;
+          if (!v) return '（未取到）';
+          if (typeof v === 'string') return v;
+          if (v.primary || v.additional) {
+            return [v.primary].concat(v.additional || []).filter(Boolean).join('、') || '（空）';
+          }
+          return JSON.stringify(v).slice(0, 120);
+        })()],
+      ];
+      var tbl = '';
+      for (var i = 0; i < lines.length; i += 1) {
+        tbl += '<div class="fl-pf-kv"><span class="k">' + esc(lines[i][0]) + '</span>'
+          + '<span class="v">' + esc(lines[i][1]) + '</span></div>';
+      }
+      return '<div class="fl-dw-load" style="text-align:left">'
+        + '<b>读 不 到 世 界 书</b>'
+        + (S.scanErr ? '<div style="color:#c98a6a;margin:6px 0 10px">' + esc(S.scanErr) + '</div>' : '')
+        + '<div style="margin:10px 0">' + tbl + '</div>'
+        + '<div style="font-size:11px;line-height:1.9;opacity:.85">'
+        + '对照上面几行：<br>'
+        + '· 「酒馆助手可用」否 → 酒馆助手没装或没启用<br>'
+        + '· 「拿到的世界书名」为空 → 世界书没挂到当前角色卡上<br>'
+        + '· 名字有但条目 0 → 书名认得，读内容失败'
+        + '</div>'
+        + '<div class="fl-pf-acts" style="margin-top:12px">'
+        + '<button class="fl-pf-btn primary" data-dw-act="rescan">重新扫描</button>'
+        + '</div>'
+        + '<div style="margin-top:10px;font-size:10.5px;opacity:.7">'
+        + '控制台可以直接看：<code>__fiefBook.debug()</code> 和 <code>await __fiefBook.probe()</code>'
+        + '</div></div>';
+    }
     var out = '';
 
     var nb = renderNeighbours();
@@ -601,6 +698,13 @@
       var act = t.closest('[data-dw-act]');
       if (act) {
         var kind = act.getAttribute('data-dw-act');
+
+        // 重扫不需要选中地点
+        if (kind === 'rescan') {
+          rescan();
+          return;
+        }
+
         var p = currentPlace();
         if (!p) return;
 

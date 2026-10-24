@@ -3,17 +3,21 @@
  *
  * 目标：运行时从酒馆里读世界书条目，不硬编码任何名单。
  *
- * 三级回退：
- *   ① TavernHelper.getWorldbook(name)     酒馆助手
- *   ② TavernHelper.getCharWorldbookNames  拿名字再取
- *   ③ world_info / 酒馆原生全局
+ * 酒馆助手的接口（见 JS-Slash-Runner 文档）：
+ *   getWorldbookNames()           → string[]
+ *   getWorldbook(name)            → Promise<WorldbookEntry[]>   ← 异步！
+ *   getCharWorldbookNames('current') → { primary, additional[] }
+ *   getGlobalWorldbookNames()     → string[]
+ *
+ * 条目的字段是 name / content / strategy.keys，不是 comment / key。
  *
  * 命定更新后重新扫一遍即可，不需要改脚本。
  *
  * 产物：window.__fiefBook
- *   scan(force)          → { entries, factions, names, count }
- *   factions[势力]       → { name, places[], overview[] }
- *   places[i]            → { faction, name, scale, where, people, len, content, tags }
+ *   scan()          → Promise<{ entries, factions, names, count, err }>
+ *   scanSync()      → 已扫过就直接给缓存，没扫过返回 null
+ *   factions[势力]  → { name, places[], overview[] }
+ *   places[i]       → { faction, name, scale, where, people, len, content, tags }
  */
 (function () {
   'use strict';
@@ -28,14 +32,11 @@
 
   /* ---------------------------------------------------------- 取条目 */
 
-  /** 把各种形状的世界书数据统一成 [{comment, content, keys, constant, order}] */
+  /** 把各种形状的条目统一成 [{comment, content, keys, constant}] */
   function normalize(raw) {
     var out = [];
     if (!raw) return out;
 
-    // 形状 A：{ entries: { uid: {...} } }
-    // 形状 B：{ entries: [ {...} ] }
-    // 形状 C：[ {...} ]
     var src = null;
     if (Array.isArray(raw)) src = raw;
     else if (raw.entries && Array.isArray(raw.entries)) src = raw.entries;
@@ -52,104 +53,145 @@
       if (!e || typeof e !== 'object') continue;
       var content = String(e.content != null ? e.content : '');
       if (!content.trim()) continue;
+
+      // 酒馆助手给 name；卡片导出给 comment；原生给 comment 或 name
+      var title = e.comment != null ? e.comment
+        : (e.name != null ? e.name : (e.title != null ? e.title : ''));
+
+      // 酒馆助手把关键字放在 strategy.keys
+      var keys = [];
+      if (Array.isArray(e.keys)) keys = e.keys.slice();
+      else if (Array.isArray(e.key)) keys = e.key.slice();
+      else if (e.strategy && Array.isArray(e.strategy.keys)) keys = e.strategy.keys.slice();
+
+      var constant = !!e.constant
+        || (e.strategy && e.strategy.type === 'constant');
+
       out.push({
-        comment: String(e.comment != null ? e.comment : (e.name != null ? e.name : '')),
+        comment: String(title),
         content: content,
-        keys: (e.keys || e.key || []).slice ? (e.keys || e.key || []).slice() : [],
-        constant: !!e.constant,
-        order: e.insertion_order != null ? e.insertion_order : (e.order != null ? e.order : 0),
+        keys: keys,
+        constant: constant,
+        order: e.insertion_order != null ? e.insertion_order
+          : (e.order != null ? e.order : (e.position && e.position.order != null ? e.position.order : 0)),
         uid: e.uid,
       });
     }
     return out;
   }
 
-  /** 试一个取书函数，成功就返回条目数组 */
-  function tryGet(fn, name) {
-    try {
-      var r = name == null ? fn() : fn(name);
-      if (!r) return null;
-      var list = normalize(r);
-      return list.length ? list : null;
-    } catch (e) {
-      return null;
-    }
+  function isPromise(x) {
+    return !!x && (typeof x === 'object' || typeof x === 'function') && typeof x.then === 'function';
   }
 
-  /** 列出所有世界书名 */
+  /** 列出所有世界书名（同步） */
   function listNames() {
     var th = TH();
     var names = [];
     var push = function (v) {
-      if (Array.isArray(v)) {
-        for (var i = 0; i < v.length; i += 1) if (typeof v[i] === 'string' && names.indexOf(v[i]) < 0) names.push(v[i]);
+      if (typeof v === 'string' && v && names.indexOf(v) < 0) names.push(v);
+      else if (Array.isArray(v)) {
+        for (var i = 0; i < v.length; i += 1) push(v[i]);
       }
     };
     if (th) {
-      try { if (typeof th.getWorldbookNames === 'function') push(th.getWorldbookNames()); } catch (e) { /* 忽略 */ }
-      try { if (typeof th.getCharWorldbookNames === 'function') {
-        var r = th.getCharWorldbookNames();
-        if (r && typeof r === 'object') {
-          push(r.primary); push(r.additional);
-          if (Array.isArray(r)) push(r);
-        } else push(r);
-      } } catch (e) { /* 忽略 */ }
+      var fns = ['getWorldbookNames', 'getGlobalWorldbookNames'];
+      for (var i = 0; i < fns.length; i += 1) {
+        try { if (typeof th[fns[i]] === 'function') push(th[fns[i]]()); } catch (e) { /* 忽略 */ }
+      }
+      // 角色卡绑定的世界书
+      try {
+        if (typeof th.getCharWorldbookNames === 'function') {
+          var cw = th.getCharWorldbookNames('current');
+          if (cw && typeof cw === 'object') { push(cw.primary); push(cw.additional); }
+        }
+      } catch (e) { /* 忽略 */ }
+      // 聊天绑定
+      try {
+        if (typeof th.getChatWorldbookName === 'function') push(th.getChatWorldbookName('current'));
+      } catch (e) { /* 忽略 */ }
     }
     try {
-      if (typeof host.world_names === 'object' && host.world_names) push(Object.keys(host.world_names));
+      if (host.world_names && typeof host.world_names === 'object') push(Object.keys(host.world_names));
     } catch (e) { /* 忽略 */ }
     return names;
   }
 
   /**
+   * 读一本书。酒馆助手的 getWorldbook 是异步的，这里统一成 Promise。
+   * 也兼容同步返回的旧实现。
+   */
+  function readOne(name) {
+    var th = TH();
+    if (!th) return Promise.resolve(null);
+    var fns = ['getWorldbook', 'getLorebook', 'getWorldbookEntries'];
+    for (var i = 0; i < fns.length; i += 1) {
+      var fn = th[fns[i]];
+      if (typeof fn !== 'function') continue;
+      try {
+        var r = fn.call(th, name);
+        if (isPromise(r)) {
+          return r.then(function (v) {
+            var list = normalize(v);
+            return list.length ? list : null;
+          }).catch(function () { return null; });
+        }
+        var list = normalize(r);
+        if (list.length) return Promise.resolve(list);
+      } catch (e) { /* 换下一个函数 */ }
+    }
+    return Promise.resolve(null);
+  }
+
+  /** 原生全局（同步） */
+  function readNative() {
+    var out = null;
+    try {
+      if (host.world_info && host.world_info.entries) out = normalize(host.world_info);
+    } catch (e) { /* 忽略 */ }
+    if (out && out.length) return out;
+    try {
+      if (host.worldBooks) {
+        var n = normalize(host.worldBooks);
+        if (n && n.length) return n;
+      }
+    } catch (e) { /* 忽略 */ }
+    return null;
+  }
+
+  /**
    * 读全部已挂载世界书的条目（合并去重）。
-   * 读不到就返回空数组，调用方自己决定怎么办。
+   * 名字一个也没拿到时，再退回原生全局。
    */
   function readAll() {
-    var th = TH();
+    var names = listNames();
     var seen = {};
     var all = [];
 
-    var absorb = function (list, from) {
+    var absorb = function (list) {
       if (!list) return;
       for (var i = 0; i < list.length; i += 1) {
         var e = list[i];
-        // 用「注释 + 内容长度 + 内容前 40 字」做去重键
         var key = e.comment + '|' + e.content.length + '|' + e.content.slice(0, 40);
         if (seen[key]) continue;
         seen[key] = 1;
-        e._from = from;
         all.push(e);
       }
     };
 
-    // ① 按名字逐个取
-    var names = listNames();
-    for (var i = 0; i < names.length; i += 1) {
-      if (!th) break;
-      var got = null;
-      if (typeof th.getWorldbook === 'function') got = tryGet(th.getWorldbook, names[i]);
-      if (!got && typeof th.getLorebook === 'function') got = tryGet(th.getLorebook, names[i]);
-      if (got) absorb(got, 'th:' + names[i]);
-    }
+    var tasks = names.map(function (n) {
+      return readOne(n).then(function (list) {
+        if (list) absorb(list);
+      });
+    });
 
-    // ② 不传名字直接取
-    if (!all.length && th && typeof th.getWorldbook === 'function') {
-      var g = tryGet(th.getWorldbook, null);
-      if (g) absorb(g, 'th:all');
-    }
-
-    // ③ 酒馆原生全局
-    if (!all.length) {
-      try {
-        if (host.world_info && host.world_info.entries) absorb(normalize(host.world_info), 'world_info');
-      } catch (e) { /* 忽略 */ }
-      try {
-        if (host.worldBooks) absorb(normalize(host.worldBooks), 'worldBooks');
-      } catch (e) { /* 忽略 */ }
-    }
-
-    return all;
+    return Promise.all(tasks).then(function () {
+      if (!all.length) {
+        var nat = readNative();
+        if (nat) absorb(nat);
+      }
+      return all;
+    });
   }
 
   /* ---------------------------------------------------------- 解析势力树 */
@@ -177,7 +219,6 @@
 
   /**
    * 只靠名字就能排除的条目——这些不是地点。
-   * 名字里带这些词的，几乎一定不是可查看的领地。
    * 注意要在任意位置命中（「永夜盟约-政治与社会」这种前缀也得拦住）。
    */
   var NOT_PLACE = /(政治与社会|地理与文化|地理与治理|地理概览|地理|文化|贵族|军事|经济|历史|总览|派系|分割线|势力概况|简介|概述|社会结构|制度|宗教|信仰|习俗|节庆|语言|货币|贸易|产业|活动|派阀)/;
@@ -193,8 +234,6 @@
    *   [奥古斯提姆帝国] 规模: 大型城市
    *   [瓦伦蒂亚]      规模: 超级城市
    * 而势力总述写的是「定位:」「疆域:」，两者都没有。
-   *
-   * 这一条比标签可靠得多——瓦伦蒂亚、萨赫拉、奥古斯提姆都不打 [城镇] 标签。
    */
   var SCALE_RE = /(^|[\s|｜,，])(?:规模|地点类别|城市规模|等级规模)\s*[:：]\s*([^\n|｜]{1,24})/m;
 
@@ -206,18 +245,13 @@
   /** 从正文里捞出位置、人口这些现成字段，省得再让 AI 猜 */
   function pickField(content, keys) {
     for (var i = 0; i < keys.length; i += 1) {
-      var re = new RegExp('(?:^|[\\\\s|｜])' + keys[i] + '\\\\s*[:：]\\\\s*([^\\\\n]{1,80})', 'm');
+      var re = new RegExp('(?:^|[\\s|｜])' + keys[i] + '\\s*[:：]\\s*([^\\n]{1,80})', 'm');
       var m = String(content || '').match(re);
       if (m && m[1].trim()) return m[1].trim();
     }
     return '';
   }
 
-  /**
-   * 从全部条目里提出势力树。
-   * 每个节点：{ 势力, 标签, 名, 字长, 规模, 位置, 人口, 原文 }
-   * isPlace 标记这条能不能当领地看着。
-   */
   function buildFactionTree(entries) {
     var factions = {};
     for (var i = 0; i < entries.length; i += 1) {
@@ -243,9 +277,7 @@
 
       var byName = NOT_PLACE.test(sp.name);
       var byTag = sp.tags.some(function (t) { return NOT_PLACE_TAG.test(t); });
-      // 名字和势力名一样 = 势力总述，不是某个地点
       var bySelf = sp.name === sp.faction;
-      // 有「规模:」就当地点；没有的话，只要名字和标签都不像总述，也先收进来
       node.isPlace = !byName && !byTag && !bySelf && (!!scale || !!sp.name);
 
       if (node.isPlace) factions[sp.faction].places.push(node);
@@ -258,38 +290,59 @@
 
   var cache = null;
 
+  /** 扫一遍（异步）。force=false 且已扫过就直接返回缓存 */
   function scan(force) {
-    if (cache && !force) return cache;
-    var entries = readAll();
-    cache = {
-      entries: entries,
-      factions: buildFactionTree(entries),
-      names: listNames(),
-      count: entries.length,
-      at: Date.now(),
-    };
-    return cache;
+    if (cache && !force) return Promise.resolve(cache);
+    return readAll().then(function (entries) {
+      cache = {
+        entries: entries,
+        factions: buildFactionTree(entries),
+        names: listNames(),
+        count: entries.length,
+        err: entries.length ? '' : '世界书里一条条目也没读到',
+        at: Date.now(),
+      };
+      return cache;
+    });
   }
+
+  function scanSync() { return cache; }
 
   host.__fiefBook = {
     scan: scan,
+    scanSync: scanSync,
     readAll: readAll,
+    readOne: readOne,
     buildFactionTree: buildFactionTree,
     splitFactionTag: splitFactionTag,
     listNames: listNames,
     normalize: normalize,
     placeScale: placeScale,
     pickField: pickField,
+    /** 诊断：把能查到的东西全列出来，扫不到时照着这个看断在哪 */
     debug: function () {
-      var c = scan(true);
-      return {
-        世界书名: c.names,
-        条目数: c.count,
-        势力数: Object.keys(c.factions).length,
-        势力: Object.keys(c.factions).map(function (k) {
-          return k + '(地点 ' + c.factions[k].places.length + ' / 总述 ' + c.factions[k].overview.length + ')';
-        }),
+      var th = TH();
+      var d = {
+        TavernHelper: !!th,
+        世界书名: listNames(),
+        有getWorldbook: !!(th && typeof th.getWorldbook === 'function'),
+        缓存条目: cache ? cache.count : null,
       };
+      try {
+        if (th && typeof th.getCharWorldbookNames === 'function') {
+          d.角色卡世界书 = th.getCharWorldbookNames('current');
+        }
+      } catch (e) { d.角色卡世界书 = 'ERR ' + e.message; }
+      return d;
+    },
+    /** 异步诊断：实际去读一遍，报告每本书读到几条 */
+    probe: function () {
+      var names = listNames();
+      return Promise.all(names.map(function (n) {
+        return readOne(n).then(function (l) { return { 书: n, 条目: l ? l.length : 0 }; });
+      })).then(function (rows) {
+        return { 书数: names.length, 明细: rows };
+      });
     },
   };
 })();

@@ -127,9 +127,23 @@ const win = {
   addEventListener() {}, removeEventListener() {}, dispatchEvent() { return true; },
   visualViewport: { width: 800, height: 600, addEventListener() {} },
   world_names: { '命定之诗与黄昏之歌v4.3': 1 },
+  // ★ 酒馆助手的真实形状：getWorldbook 返回 Promise，条目字段是 name 不是 comment
   TavernHelper: {
     getWorldbookNames: () => ['命定之诗与黄昏之歌v4.3'],
-    getWorldbook: (n) => (n === '命定之诗与黄昏之歌v4.3' ? card.data.character_book : null),
+    getCharWorldbookNames: () => ({ primary: '命定之诗与黄昏之歌v4.3', additional: [] }),
+    getWorldbook: async (n) => {
+      if (n !== '命定之诗与黄昏之歌v4.3') return [];
+      return Object.keys(card.data.character_book.entries).map((k) => {
+        const e = card.data.character_book.entries[k];
+        return {
+          uid: Number(k),
+          name: e.comment,               // ← 酒馆助手叫 name
+          enabled: true,
+          content: e.content,
+          strategy: { type: e.constant ? 'constant' : 'selective', keys: e.key || [] },
+        };
+      });
+    },
     getVariables: () => ({
       stat_data: {
         主角: {
@@ -197,8 +211,17 @@ ok('提示词是「外交档案」', !!(win.__fiefPrompts && win.__fiefPrompts['
 ok('__fiefLedger', !!win.__fiefLedger);
 
 /* ---------------- 邻邦 ---------------- */
-console.log('\n=== 邻邦接入 ===');
+console.log('\n=== 世界书扫描（异步） ===');
 const dip = win.__fiefDiplo;
+// 扫描是异步的，等它跑完
+await win.__fiefBook.scan(false);
+const sc = win.__fiefBook.scanSync();
+dip.state.ready = !!(sc && sc.count);   // 正常由 ensureScan() 置位，测试里手动置
+ok('扫到条目', !!sc && sc.count > 500, sc ? String(sc.count) : 'null');
+ok('拆出势力', !!sc && Object.keys(sc.factions).length === 10, sc ? String(Object.keys(sc.factions).length) : '');
+console.log('  条目 ' + sc.count + '，势力 ' + Object.keys(sc.factions).length);
+
+console.log('\n=== 邻邦接入 ===');
 dip.state.faction = '奥古斯提姆帝国';
 dip.state.place = '';
 // 主脚本在 renderDiplomacy 里塞邻邦；这里直接模拟
