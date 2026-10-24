@@ -147,26 +147,72 @@
     return m;
   }
 
-  async function loadManifest() {
-    // 先试网络
-    try {
-      const bytes = await fetchWithFallback('manifest.json', TIMEOUT.manifest);
-      const text = new TextDecoder('utf-8').decode(bytes);
-      const m = validateManifest(JSON.parse(text));
-      await cachePut('__manifest', bytes);
-      log('manifest 来自网络 v' + m.version);
-      return { manifest: m, fromCache: false };
-    } catch (e) {
-      log('manifest 网络失败，试缓存：' + (e && e.message));
-      const cached = await cacheGet('__manifest');
-      if (!cached) throw new Error('拿不到 manifest，也没有缓存。\n' + (e && e.message));
-      const m = validateManifest(JSON.parse(new TextDecoder('utf-8').decode(cached)));
-      log('manifest 来自缓存 v' + m.version);
-      return { manifest: m, fromCache: true };
+  /** 比较版本号 a > b 返回正数 */
+  function cmpVer(a, b) {
+    const pa = String(a || '0').split('.').map((x) => parseInt(x, 10) || 0);
+    const pb = String(b || '0').split('.').map((x) => parseInt(x, 10) || 0);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
+      const d = (pa[i] || 0) - (pb[i] || 0);
+      if (d) return d;
     }
+    return 0;
   }
 
-  async function loadModule(mod) {
+  async function loadManifest() {
+    // 两个源同时问，取版本高的那个。
+    // 只按顺序取第一个能用的会踩坑：jsDelivr 缓存旧版时它照样返回 200，
+    // 于是就永远拿不到刚推的新版本。
+    const results = await Promise.all(SOURCES.map(async (base) => {
+      const url = baseOf(base) + 'manifest.json';
+      try {
+        const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+        const timer = ctl ? setTimeout(() => ctl.abort(), TIMEOUT.manifest) : null;
+        let res;
+        try {
+          res = await fetch(url, Object.assign(
+            { cache: 'no-store', credentials: 'omit' },
+            ctl ? { signal: ctl.signal } : {},
+          ));
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        if (!bytes.length) throw new Error('空文件');
+        const m = validateManifest(JSON.parse(new TextDecoder('utf-8').decode(bytes)));
+        return { base, bytes, manifest: m, err: null };
+      } catch (e) {
+        return { base, bytes: null, manifest: null, err: (e && e.message) || String(e) };
+      }
+    }));
+
+    const good = results.filter((r) => r.manifest);
+    if (good.length) {
+      // 版本高的优先；同版本按 SOURCES 原顺序（jsDelivr 在前）
+      good.sort((a, b) => cmpVer(b.manifest.version, a.manifest.version));
+      const best = good[0];
+      state.source = best.base;
+      await cachePut('__manifest', best.bytes);
+      const others = good.filter((r) => r !== best)
+        .map((r) => r.base + '=v' + r.manifest.version).join(', ');
+      log('manifest v' + best.manifest.version + ' 来自 ' + best.base
+        + (others ? '（其余：' + others + '）' : ''));
+      return { manifest: best.manifest, fromCache: false };
+    }
+
+    // 全网失败，回退缓存
+    log('manifest 网络全失败，试缓存：' + results.map((r) => r.base + ' -> ' + r.err).join('; '));
+    const cached = await cacheGet('__manifest');
+    if (!cached) {
+      throw new Error('拿不到 manifest，也没有缓存。\n'
+        + results.map((r) => r.base + ' -> ' + r.err).join('\n'));
+    }
+    const m = validateManifest(JSON.parse(new TextDecoder('utf-8').decode(cached)));
+    log('manifest 来自缓存 v' + m.version);
+    return { manifest: m, fromCache: true };
+  }
+
+  async function loadModule(mod, preferBase) {
     const key = mod.path + '@' + mod.sha256;
     // 1) 先看缓存里有没有同 hash 的
     const cached = await cacheGet(key);
@@ -177,14 +223,40 @@
         return { bytes: cached, fromCache: true };
       }
     }
-    // 2) 网络
-    const bytes = await fetchWithFallback(mod.path, TIMEOUT.module);
-    const got = await sha256(bytes);
-    if (got && got.toLowerCase() !== mod.sha256.toLowerCase()) {
-      throw new Error(mod.path + ' 校验失败\n  期望 ' + mod.sha256 + '\n  实得 ' + got);
+    // 2) 网络：优先 manifest 的来源，其余依次补
+    const bases = preferBase
+      ? [preferBase].concat(SOURCES.filter((s) => s !== preferBase))
+      : SOURCES.slice();
+    const errs = [];
+    for (const base of bases) {
+      const url = baseOf(base) + mod.path;
+      try {
+        const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+        const timer = ctl ? setTimeout(() => ctl.abort(), TIMEOUT.module) : null;
+        let res;
+        try {
+          res = await fetch(url, Object.assign(
+            { cache: 'no-store', credentials: 'omit' },
+            ctl ? { signal: ctl.signal } : {},
+          ));
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        if (!bytes.length) throw new Error('空文件');
+        const got = await sha256(bytes);
+        if (got && got.toLowerCase() !== mod.sha256.toLowerCase()) {
+          // 这个源还是旧版（缓存没刷），换下一个
+          throw new Error('校验不符（这个源还是旧版）');
+        }
+        await cachePut(key, bytes);
+        return { bytes, fromCache: false };
+      } catch (e) {
+        errs.push(base + ' -> ' + ((e && e.message) || String(e)));
+      }
     }
-    await cachePut(key, bytes);
-    return { bytes, fromCache: false };
+    throw new Error(mod.path + ' 所有来源都拿不到匹配的版本：\n  ' + errs.join('\n  '));
   }
 
   function execute(mod, text) {
@@ -212,7 +284,7 @@
 
       const texts = [];
       for (const mod of manifest.modules) {
-        const { bytes, fromCache: cached } = await loadModule(mod);
+        const { bytes, fromCache: cached } = await loadModule(mod, state.source);
         texts.push({ mod, text: new TextDecoder('utf-8').decode(bytes), cached });
       }
 
