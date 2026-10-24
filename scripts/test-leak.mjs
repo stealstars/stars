@@ -67,8 +67,8 @@ const RULES = [
     hint: '同上',
   },
   {
-    name: '真实中转域名',
-    re: /\b(?:[\w-]+\.)*(?:ggchan\.dev|gcli\.[\w.-]+)/gi,
+    name: '中转域名',
+    re: /\b(?:[\w-]+\.)*(?:ggch[a]n\.dev|gcl[i]\.[\w.-]+)/gi,
     hint: '注释里也不要写，用 https://你的中转地址 代替',
   },
   {
@@ -78,7 +78,7 @@ const RULES = [
   },
   {
     name: 'GitHub token',
-    re: /\bghp_[A-Za-z0-9]{20,}/g,
+    re: /\bgh[pousr]_[A-Za-z0-9]{20,}/g,
     hint: '不要提交 token',
   },
   {
@@ -118,9 +118,9 @@ const P = (...xs) => xs.join('');
 const SAMPLES = [
   [P('sk-', '4b7a54e48b24894e9b9892a19f03b57a0b2dd21c82aa0a'), '真实 API 密钥'],
   [P('gg-', 'gcli-pO5zJnyBXn91smqU2v6xLyQ6nc'), 'gg- 开头的中转密钥'],
-  [P('gcli', '.ggchan', '.dev'), '真实中转域名'],
+  [P('gcli', '.ggch', 'an', '.dev'), '中转域名'],
   [P('127', '.0.0.1:8790', '/v1'), '本机 API 地址'],
-  [P('ghp_', 'dp9Sdv0DNmToA4DP1AUBUkWFfE0ZcH4A'), 'GitHub token'],
+  [P('gh', 'p_', 'dp9Sdv0DNmToA4DP1AUBUkWFfE0ZcH4A'), 'GitHub token'],
 ];
 for (const [sample, label] of SAMPLES) {
   const rule = RULES.find((r) => r.name === label);
