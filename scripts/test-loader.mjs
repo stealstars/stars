@@ -287,7 +287,7 @@ console.log('\n=== 4b. manifest 里 hash 被改 ===');
   boot(b);
   const st = await waitDone(b);
   eq('hash 不对就报错', st && st.phase, 'error', st && st.error);
-  ok('报错提到校验失败', /校验失败/.test(String(st.error)), String(st.error).slice(0, 160));
+  ok('报错说明拿不到匹配版本', /拿不到匹配的版本|校验不符/.test(String(st.error)), String(st.error).slice(0, 160));
   eq('一个模块都没跑', b.scriptsRan.length, 0);
 }
 
@@ -297,8 +297,8 @@ console.log('\n=== 5. core 内容被改 ===');
   boot(b);
   const st = await waitDone(b);
   eq('core 被改就报错', st && st.phase, 'error', st && st.error);
-  ok('报错提到校验失败', /校验失败/.test(String(st.error)), String(st.error).slice(0, 160));
-  ok('报错里有期望与实得', /期望/.test(String(st.error)) && /实得/.test(String(st.error)));
+  ok('报错说明拿不到匹配版本', /拿不到匹配的版本|校验不符/.test(String(st.error)), String(st.error).slice(0, 160));
+  ok('报错列出了每个源', /127\.0\.0\.1/.test(String(st.error)), String(st.error).slice(0, 140));
   eq('整批都不执行', b.scriptsRan.length, 0);
 }
 

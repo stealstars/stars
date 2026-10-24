@@ -22,12 +22,15 @@ const MOD = path.join(ROOT, 'modules');
  * 主脚本最后跑，因为它在启动时要读 window.__fiefPolicy 之类。
  */
 const MANIFEST = [
+  { path: 'modules/worldbook.js', desc: '世界书读取' },
   { path: 'modules/policy.data.js', desc: '政令数据表' },
   { path: 'modules/policy.css.js', desc: '政令样式' },
   { path: 'modules/policy.ui.js', desc: '政令抽卡界面' },
   { path: 'modules/ai.css.js', desc: 'AI 面板样式' },
   { path: 'modules/ai.chan.js', desc: 'AI 通道' },
   { path: 'modules/ai.settings.js', desc: 'AI 凭据面板' },
+  { path: 'modules/diplo.css.js', desc: '外交页样式' },
+  { path: 'modules/diplo.ui.js', desc: '外交页逻辑' },
   { path: 'modules/prompts/diplomacy.js', desc: '外交提示词' },
   { path: 'modules/core.js', desc: '主脚本' },
 ];

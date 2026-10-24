@@ -2664,11 +2664,12 @@
 
   `;
 
-  /* --- 模块样式：来自 modules/policy.css.js 与 modules/ai.css.js --- */
+  /* --- 模块样式：来自 modules/policy.css.js、ai.css.js、diplo.css.js --- */
   function injectModuleCss() {
     const list = [
       ['fief-ledger-css-policy', window.__fiefCssPolicy],
       ['fief-ledger-css-ai', window.__fiefCssAi],
+      ['fief-ledger-css-diplo', window.__fiefCssDiplo],
     ];
     for (const pair of list) {
       const id = pair[0], css = pair[1];
@@ -4127,13 +4128,33 @@
   }
 
   /* ------------------------------------------------------------ 渲染 */
+  /** 外交页交给 modules/diplo.ui.js 渲染；它读世界书，不依赖当前领地 */
+  function renderDiplomacy(d) {
+    const mod = window.__fiefDiplo;
+    if (mod && typeof mod.html === 'function') {
+      let out = '';
+      try { out = mod.html(); } catch (e) {
+        out = '<div class="fl-empty"><b>◇</b>外交页出错'
+          + '<small>' + String((e && e.message) || e) + '</small></div>';
+      }
+      viewEl.innerHTML = '<div class="fl-diplo-root">' + out + '</div>';
+      if (typeof mod.bind === 'function') {
+        try { mod.bind(viewEl.querySelector('.fl-diplo-root')); } catch (e) { /* 忽略 */ }
+      }
+      return;
+    }
+    // 模块没加载：退回原来那份简版
+    viewEl.innerHTML = diplomacyHtml(d);
+    bindView(d);
+  }
+
   function renderView(d) {
     if (!viewEl) return;
     // 设置是独立面板，view 整块让位，不往里写
     if (page === '设置') return;
     // 政策不依赖领地数据，没领地也能用
     if (page === '政策') { renderPolicy(); return; }
-    if (page === '外交') { viewEl.innerHTML = diplomacyHtml(d); bindView(d); return; }
+    if (page === '外交') { renderDiplomacy(d); return; }
     if (page === '历史') { viewEl.innerHTML = historyHtml(d); bindView(d); return; }
     if (selected === 'diag') {
       viewEl.innerHTML = diagHtml();
@@ -4885,6 +4906,19 @@
   // 同一个实例也在宿主窗口留一份，下次加载（不论从哪个 iframe 进来）才清得到
   try {
     if (host && host !== window) host[KEY] = window[KEY];
+  } catch (e) { /* 忽略 */ }
+
+  /* ------------------------------------------------------ 给模块用的钩子 */
+  // 外交页等外部模块不直接碰主脚本内部，只通过这两个函数回来
+  window.__fiefRenderView = function () { try { renderView(currentDomain()); } catch (e) { /* 忽略 */ } };
+  window.__fiefSendToInput = function (text) {
+    try { return fillComposer(String(text == null ? '' : text)); } catch (e) { return false; }
+  };
+  try {
+    if (host && host !== window) {
+      host.__fiefRenderView = window.__fiefRenderView;
+      host.__fiefSendToInput = window.__fiefSendToInput;
+    }
   } catch (e) { /* 忽略 */ }
 
   console.log('[领地档案] v' + VERSION + ' 已加载 · 通道 ' + JSON.stringify(chan));
