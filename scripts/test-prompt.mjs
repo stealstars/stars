@@ -1,4 +1,7 @@
 // 用真实 API 跑一遍外交提示词
+//
+// 凭据从环境变量读，不要硬编码。公开仓库里不要出现地址和密钥。
+//   FIEF_BASE=https://your-endpoint/v1  FIEF_KEY=sk-...  node scripts/test-prompt.mjs [模型名]
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,9 +9,15 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
 
-const KEY = 'sk-4b7a54e48b24894e9b9892a19f03b57a0b2dd21c82aa0a891eba88951de366e3';
-const BASE = 'http://127.0.0.1:8790/v1';
-const MODEL = process.argv[2] || 'glm-5.3-flash';
+const KEY = process.env.FIEF_KEY || '';
+const BASE = process.env.FIEF_BASE || '';
+const MODEL = process.argv[2] || process.env.FIEF_MODEL || '';
+
+if (!KEY || !BASE) {
+  console.log('跳过：没设 FIEF_BASE / FIEF_KEY 环境变量。');
+  console.log('用法：FIEF_BASE=https://host/v1 FIEF_KEY=sk-... node scripts/test-prompt.mjs [模型名]');
+  process.exit(0);
+}
 
 // 加载提示词模块
 const win = {};

@@ -35,7 +35,7 @@ ok('空 → 外交', AI.canon('') === '外交');
 ok('未知原样', AI.canon('历史') === '历史');
 
 console.log('\n=== 存进去 ===');
-AI.setConf('外交', { base: 'http://127.0.0.1:8790/v1', key: 'sk-test-123456', model: 'glm-5.3-flash' });
+AI.setConf('外交', { base: 'https://example.test/v1', key: 'sk-test-123456', model: 'test-model-a' });
 ok('localStorage 有东西', !!store['fiefLedger.aichan.v1'], JSON.stringify(Object.keys(store)));
 
 console.log('\n=== 用别的键名读 ===');
@@ -43,21 +43,21 @@ const a = AI.getConf('外交');
 const b = AI.getConf('diplomacy');
 const c = AI.getConf('外交档案');
 const d = AI.getConf();
-ok('外交 读得到', a.base === 'http://127.0.0.1:8790/v1' && a.key === 'sk-test-123456', JSON.stringify(a));
+ok('外交 读得到', a.base === 'https://example.test/v1' && a.key === 'sk-test-123456', JSON.stringify(a));
 ok('diplomacy 读得到', b.key === 'sk-test-123456', JSON.stringify(b));
 ok('外交档案 读得到', c.key === 'sk-test-123456', JSON.stringify(c));
-ok('不传参数读得到', d.base === 'http://127.0.0.1:8790/v1');
+ok('不传参数读得到', d.base === 'https://example.test/v1');
 ok('四处读到同一份', a.key === b.key && b.key === c.key && c.key === d.key);
 
 console.log('\n=== 反向：用 diplomacy 存 ===');
-AI.setConf('diplomacy', { base: 'https://gcli.ggchan.dev', key: 'gg-xyz', model: 'agy-gemini-3.8-flash-low' });
+AI.setConf('diplomacy', { base: 'https://example2.test', key: 'sk-second', model: 'test-model-b' });
 const e = AI.getConf('外交');
-ok('用 diplomacy 存，外交 读得到', e.key === 'gg-xyz', JSON.stringify(e));
-ok('模型也跟着换', e.model === 'agy-gemini-3.8-flash-low');
+ok('用 diplomacy 存，外交 读得到', e.key === 'sk-second', JSON.stringify(e));
+ok('模型也跟着换', e.model === 'test-model-b');
 
 console.log('\n=== 端到端：面板存 → 外交页读 ===');
 // 面板存的时候用 '外交'
-AI.setConf('外交', { base: 'http://127.0.0.1:8790/v1', key: 'sk-e2e-key', model: 'glm-5.3-flash' });
+AI.setConf('外交', { base: 'https://example.test/v1', key: 'sk-e2e-key', model: 'test-model-a' });
 // 外交页调 chat() 时传的是 module: 'diplomacy'
 let seen = null;
 win.fetch = async (url, opts) => {
@@ -71,7 +71,7 @@ win.fetch = async (url, opts) => {
 // 重新加载模块，让它用新的 fetch
 new Function('window', 'console', 'fetch', fs.readFileSync('D:\\223\\fief-ledger\\modules\\ai.chan.js', 'utf8'))(win, console, win.fetch);
 // 重新写一次，因为上面重载清了状态
-win.__fiefAI.setConf('外交', { base: 'http://127.0.0.1:8790/v1', key: 'sk-e2e-key', model: 'glm-5.3-flash' });
+win.__fiefAI.setConf('外交', { base: 'https://example.test/v1', key: 'sk-e2e-key', model: 'test-model-a' });
 
 let chatErr = '';
 try {
@@ -82,8 +82,8 @@ try {
 ok('chat 没报「还没配置」', chatErr.indexOf('还没配置') < 0, chatErr);
 ok('确实发出请求了', !!seen, 'fetch 没被调');
 if (seen) {
-  ok('请求打到正确端点', seen.url === 'http://127.0.0.1:8790/v1/chat/completions', seen.url);
-  ok('请求体用了存的模型', seen.body.model === 'glm-5.3-flash', seen.body.model);
+  ok('请求打到正确端点', seen.url === 'https://example.test/v1/chat/completions', seen.url);
+  ok('请求体用了存的模型', seen.body.model === 'test-model-a', seen.body.model);
 }
 
 console.log('\n=== 存储可用性 ===');
