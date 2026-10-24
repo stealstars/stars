@@ -1,0 +1,61 @@
+{
+  "name": "fief-ledger",
+  "displayName": "领地档案",
+  "version": "0.9.0",
+  "channel": "stable",
+  "schemaVersion": 1,
+  "loaderMin": "0.1.0",
+  "publishedAt": "2026-10-24",
+  "moduleCount": 8,
+  "totalBytes": 298029,
+  "modules": [
+    {
+      "path": "modules/policy.data.js",
+      "desc": "政令数据表",
+      "bytes": 13645,
+      "sha256": "9b9210a34533763ead1f2f2ebc05d39f3316ea523b7cd7c65c581152039833e7"
+    },
+    {
+      "path": "modules/policy.css.js",
+      "desc": "政令样式",
+      "bytes": 22372,
+      "sha256": "82c807e130678d12647dd05c7cf6ac0df492e0a8dfa6adbcd3f0d497b9b6ef7d"
+    },
+    {
+      "path": "modules/policy.ui.js",
+      "desc": "政令抽卡界面",
+      "bytes": 14454,
+      "sha256": "210f8094d65bdaf673d1f07fc9b8ea49d8a6caa3362e4a042cd879fb5ba03e61"
+    },
+    {
+      "path": "modules/ai.css.js",
+      "desc": "AI 面板样式",
+      "bytes": 13828,
+      "sha256": "b7ca71ad26836fb3bc07fd31e270364f6c6953d14d2fa844d07cff5d28203ccf"
+    },
+    {
+      "path": "modules/ai.chan.js",
+      "desc": "AI 通道",
+      "bytes": 10182,
+      "sha256": "85831eebc617089fc8f67f202c02dc7d4ff67adea23b5fd90274e08109000d8f"
+    },
+    {
+      "path": "modules/ai.settings.js",
+      "desc": "AI 凭据面板",
+      "bytes": 9346,
+      "sha256": "7bfdd46ace2a9f2248acbcc05e705c2c31e5727ebb4948a3e7a2ed88b86b4bdb"
+    },
+    {
+      "path": "modules/prompts/diplomacy.js",
+      "desc": "外交提示词",
+      "bytes": 3994,
+      "sha256": "8983442a7f24a11a92bb54983a58e392821524023175f51a1f9e6b0ad80571ea"
+    },
+    {
+      "path": "modules/core.js",
+      "desc": "主脚本",
+      "bytes": 210208,
+      "sha256": "4d35951d26375c75a9751157b74770b5d41a2e173105a06030f90dc0b43a5103"
+    }
+  ]
+}

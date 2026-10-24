@@ -1,0 +1,20 @@
+# 依赖不用提交
+node_modules/
+
+# 系统杂项
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+
+# 日志
+*.log
+npm-debug.log*
+
+# 本地测试产物
+.tmp/
+dist/
