@@ -2691,6 +2691,9 @@
 
   /* ------------------------------------------------------------ 骨架 */
   function buildUI() {
+    // 模块样式先注入：政策抽卡、AI 设置面板的样式在独立模块里
+    injectModuleCss();
+
     const oldStyle = doc.getElementById(STYLE_ID);
     if (oldStyle && oldStyle.parentNode) oldStyle.parentNode.removeChild(oldStyle);
     const st = doc.createElement('style');
