@@ -1,13 +1,13 @@
 {
   "name": "fief-ledger",
   "displayName": "领地档案",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "channel": "stable",
   "schemaVersion": 1,
   "loaderMin": "0.1.0",
   "publishedAt": "2026-10-24",
   "moduleCount": 8,
-  "totalBytes": 302161,
+  "totalBytes": 302274,
   "modules": [
     {
       "path": "modules/policy.data.js",
@@ -54,8 +54,8 @@
     {
       "path": "modules/core.js",
       "desc": "主脚本",
-      "bytes": 210208,
-      "sha256": "4d35951d26375c75a9751157b74770b5d41a2e173105a06030f90dc0b43a5103"
+      "bytes": 210321,
+      "sha256": "552c73e83f7cc5c838be457f5d45605902f068c3f29ca08fbc83f39237e9b862"
     }
   ]
 }
