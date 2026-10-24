@@ -4132,6 +4132,15 @@
   function renderDiplomacy(d) {
     const mod = window.__fiefDiplo;
     if (mod && typeof mod.html === 'function') {
+      // 把当前领地的邻邦与档位交给外交页，它自己不去翻变量
+      try {
+        if (typeof mod.setNeighbours === 'function') {
+          mod.setNeighbours(dipRows(d));
+        }
+        if (typeof mod.setOwnTier === 'function') {
+          mod.setOwnTier(d && d.规模档 ? d.规模档 : '');
+        }
+      } catch (e) { /* 忽略 */ }
       let out = '';
       try { out = mod.html(); } catch (e) {
         out = '<div class="fl-empty"><b>◇</b>外交页出错'
@@ -4146,6 +4155,12 @@
     // 模块没加载：退回原来那份简版
     viewEl.innerHTML = diplomacyHtml(d);
     bindView(d);
+  }
+
+  /** 外交页建档完成后要能局部重绘，不整页刷 */
+  function renderDiploOnly() {
+    if (page !== '外交') return;
+    renderDiplomacy(currentDomain());
   }
 
   function renderView(d) {
@@ -4911,12 +4926,14 @@
   /* ------------------------------------------------------ 给模块用的钩子 */
   // 外交页等外部模块不直接碰主脚本内部，只通过这两个函数回来
   window.__fiefRenderView = function () { try { renderView(currentDomain()); } catch (e) { /* 忽略 */ } };
+  window.__fiefRenderDiplo = function () { try { renderDiploOnly(); } catch (e) { /* 忽略 */ } };
   window.__fiefSendToInput = function (text) {
     try { return fillComposer(String(text == null ? '' : text)); } catch (e) { return false; }
   };
   try {
     if (host && host !== window) {
       host.__fiefRenderView = window.__fiefRenderView;
+      host.__fiefRenderDiplo = window.__fiefRenderDiplo;
       host.__fiefSendToInput = window.__fiefSendToInput;
     }
   } catch (e) { /* 忽略 */ }

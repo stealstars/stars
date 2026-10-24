@@ -128,19 +128,49 @@ load('modules/ai.settings.js');
 ok('AI 面板挂在 __fiefAISettings', !!win.__fiefAISettings);
 
 load('modules/prompts/diplomacy.js');
-ok('外交提示词挂在 __fiefPrompts', !!win.__fiefPrompts && !!win.__fiefPrompts['外交']);
+ok('外交提示词挂在 __fiefPrompts', !!win.__fiefPrompts && !!win.__fiefPrompts['外交档案']);
 {
-  const p = win.__fiefPrompts['外交'];
+  const p = win.__fiefPrompts['外交档案'];
   ok('提示词有 system', typeof p.system === 'string' && p.system.length > 100);
-  ok('提示词有 8 个字段', p.fields.length === 8);
-  ok('提示词有示例', !!p.example && !!p.example.势力名);
-  ok('示例字段齐全', p.fields.every((f) => p.example[f]));
-  const built = p.build({ 势力: '瓦伦蒂亚', 方向: '军事部署' });
-  ok('模板替换势力', built.indexOf('瓦伦蒂亚') >= 0);
-  ok('模板替换方向', built.indexOf('军事部署') >= 0);
-  ok('模板不再有占位符', built.indexOf('{势力}') < 0 && built.indexOf('{方向}') < 0);
-  const empty = p.build({});
-  ok('无参数也不崩', empty.indexOf('未指定') >= 0);
+  ok('提示词有 16 个字段', p.fields.length === 16, String(p.fields.length));
+  ok('字段与领地面板一致', ['领地', '规模档', '治安', '民心', '军事', '要事'].every((f) => p.fields.indexOf(f) >= 0));
+  ok('提示词有示例', !!p.example && !!p.example.领地);
+  ok('示例字段齐全', p.fields.every((f) => p.example[f] != null));
+  ok('有输出形状', typeof p.shape === 'string' && p.shape.indexOf('"领地"') >= 0);
+
+  const built = p.build({ 领地: '翠庭城', 所属势力: '奥古斯提姆帝国', 原文: '翠庭城: 位置: 索莱尔省' });
+  ok('模板替换地名', built.indexOf('翠庭城') >= 0);
+  ok('模板带入原文', built.indexOf('索莱尔省') >= 0);
+  ok('模板带所属势力', built.indexOf('奥古斯提姆帝国') >= 0);
+  ok('无参数也不崩', p.build({}).length > 100);
+
+  /* 解析与纠正 */
+  const parsed = p.parse('```json\n{"领地":"翠庭城","规模档":"第7档·大型城市（原文标注）","状态":"承平","治安":"治安 75 左右","民心":"80","物资":"充裕","军事":[],"营造":[],"物产":[],"要事":[],"治下":{"头衔":"城主","主":"甲"}}\n```');
+  ok('能剥掉代码块', parsed.领地 === '翠庭城');
+  const norm = p.normalize(parsed);
+  ok('规模档被纠正成单一名词', norm.规模档 === '大型城市', norm.规模档);
+  ok('治安被抽成数字', norm.治安 === '75', norm.治安);
+  ok('缺字段被补成空串', norm.金库 === '');
+  ok('数组字段是数组', Array.isArray(norm.军事) && Array.isArray(norm.要事));
+  ok('治下是对象', norm.治下 && typeof norm.治下 === 'object');
+
+  const over = p.normalize({
+    领地: 'X', 规模档: '村庄', 状态: '承平', 治安: '1', 民心: '2', 物资: '尚可',
+    人口: '一'.repeat(40), 金库: '', 月净额: '',
+    军事: [1, 2, 3, 4, 5].map((i) => ({ 编制: '队' + i, 人数: '约' + i, 层级: '第一层级' })),
+    营造: [1, 2, 3, 4, 5, 6, 7].map((i) => ({ 名: '建' + i, 数量: '' + i, 状态: '完好' })),
+    物产: [1, 2, 3, 4, 5].map((i) => ({ 名: '物' + i, 数量: '乱写', 周期: '乱写', 状态: '' })),
+    要事: [1, 2, 3, 4, 5].map((i) => '事' + i),
+    治下: { 头衔: '城主', 主: '', 副: '', 态度: '乱写' },
+  });
+  ok('军事截到 3 项', over.军事.length === 3, String(over.军事.length));
+  ok('营造截到 5 项', over.营造.length === 5, String(over.营造.length));
+  ok('物产截到 4 项', over.物产.length === 4, String(over.物产.length));
+  ok('要事截到 3 条', over.要事.length === 3, String(over.要事.length));
+  ok('人口被截断', over.人口.length <= 21, String(over.人口.length));
+  ok('物资兜底', over.物资 === '尚可');
+  ok('态度兜底', over.治下.态度 === '观望', over.治下.态度);
+  ok('物产数量兜底', over.物产[0].数量 === '中', over.物产[0].数量);
 }
 
 /* ---------- 8. core 完整性 ---------- */
