@@ -118,15 +118,14 @@
       </div>
 
       ${(() => {
-    // 存储状态：一眼看出凭据到底在不在
+    // 存储状态：只说存没存、本机能不能写。
+    // 不显示地址，也不显示密钥的任何片段——截图会外流。
     const has = !!(c.base && c.key);
     const okStore = ai().storeOk ? ai().storeOk() : true;
     const bits = [];
     bits.push(has ? '<b style="color:#8fbf7f">已保存</b>' : '<b style="color:#c98a6a">未保存</b>');
     bits.push(okStore ? '本机可写' : '<b style="color:#c98a6a">本机存储不可写</b>');
-    if (c.base) bits.push('地址 ' + escFn(c.base));
-    if (c.key) bits.push('密钥 ' + escFn(String(c.key).slice(0, 6)) + '…' + escFn(String(c.key).slice(-4)));
-    return '<div class="fl-aic-dist">' + bits.join('　·　') + '</div>';
+    return bits.length ? '<div class="fl-aic-dist">' + bits.join('　·　') + '</div>' : '';
   })()}
 
       ${err ? `<div class="fl-aic-err">${escFn(err)}</div>` : ''}

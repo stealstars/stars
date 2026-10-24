@@ -86,6 +86,57 @@ if (seen) {
   ok('请求体用了存的模型', seen.body.model === 'test-model-a', seen.body.model);
 }
 
+console.log('\n=== 界面不许把密钥吐出来 ===');
+{
+  // 加载设置面板，渲染一次，检查 HTML 里有没有密钥
+  const store2 = {};
+  const win3 = {
+    localStorage: {
+      getItem(k) { return Object.prototype.hasOwnProperty.call(store2, k) ? store2[k] : null; },
+      setItem(k, v) { store2[k] = String(v); },
+      removeItem(k) { delete store2[k]; },
+    },
+    console,
+    setTimeout, clearTimeout,
+    fetch: async () => ({ ok: false, status: 404 }),
+  };
+  win3.window = win3;
+  const chan = fs.readFileSync('D:\\223\\fief-ledger\\modules\\ai.chan.js', 'utf8');
+  const sett = fs.readFileSync('D:\\223\\fief-ledger\\modules\\ai.settings.js', 'utf8');
+  new Function('window', 'console', 'fetch', chan)(win3, console, win3.fetch);
+  new Function('window', 'console', sett)(win3, console);
+
+  // 假密钥：故意用不会碰泄漏规则的形状
+  const SECRET = 'testkey_ABCDEFGHIJKLMNOP123456';
+  const HOST = 'https://example.test/v1';
+  win3.__fiefAI.setConf('外交', { base: HOST, key: SECRET, model: 'test-model' });
+
+  const html = win3.__fiefAISettings._test.html();
+
+  // 输入框的 value 允许有密钥——那是给人编辑的。
+  // 除它以外，整块 HTML 都不许出现密钥的任何片段。
+  const withoutInputs = html
+    .replace(/(<input[^>]*id="fl-aic-(?:base|key)"[^>]*>)/g, '')
+    .replace(/value="[^"]*"/g, '');
+
+  ok('除输入框外没有完整密钥', withoutInputs.indexOf(SECRET) < 0);
+  ok('除输入框外没有密钥前 6 位', withoutInputs.indexOf(SECRET.slice(0, 6)) < 0, SECRET.slice(0, 6));
+  ok('除输入框外没有密钥后 4 位', withoutInputs.indexOf(SECRET.slice(-4)) < 0, SECRET.slice(-4));
+  ok('除输入框外没有密钥中段', withoutInputs.indexOf(SECRET.slice(8, 20)) < 0);
+  ok('除输入框外没有地址明示', withoutInputs.indexOf('地址 ' + HOST) < 0);
+
+  // 输入框本身还在，值也还在（不然用户没法看/改）
+  const keyInputCount = (html.match(/id="fl-aic-key"/g) || []).length;
+  ok('密钥框还在', keyInputCount === 1, String(keyInputCount));
+  const keyInput = html.slice(html.indexOf('id="fl-aic-key"'));
+  const valMatch = keyInput.slice(0, 400).match(/value="([^"]*)"/);
+  ok('密钥在输入框 value 里', !!valMatch && valMatch[1] === SECRET, valMatch ? '(有但不等)' : '没找到 value');
+
+  // 状态行只剩「已保存 / 本机可写」
+  ok('状态行说已保存', html.indexOf('已保存') >= 0);
+  ok('状态行不报地址', html.indexOf('地址 ') < 0);
+}
+
 console.log('\n=== 存储可用性 ===');
 ok('storeOk 报可用', AI.storeOk() === true);
 
