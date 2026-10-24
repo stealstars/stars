@@ -117,11 +117,24 @@
   })()}
       </div>
 
+      ${(() => {
+    // 存储状态：一眼看出凭据到底在不在
+    const has = !!(c.base && c.key);
+    const okStore = ai().storeOk ? ai().storeOk() : true;
+    const bits = [];
+    bits.push(has ? '<b style="color:#8fbf7f">已保存</b>' : '<b style="color:#c98a6a">未保存</b>');
+    bits.push(okStore ? '本机可写' : '<b style="color:#c98a6a">本机存储不可写</b>');
+    if (c.base) bits.push('地址 ' + escFn(c.base));
+    if (c.key) bits.push('密钥 ' + escFn(String(c.key).slice(0, 6)) + '…' + escFn(String(c.key).slice(-4)));
+    return '<div class="fl-aic-dist">' + bits.join('　·　') + '</div>';
+  })()}
+
       ${err ? `<div class="fl-aic-err">${escFn(err)}</div>` : ''}
       ${busy === 'test' ? '<div class="fl-aic-ok">正在测试连接…</div>' : ''}
 
       <div class="fl-aic-foot">
-        <button class="fl-aic-btn primary" id="fl-aic-test"${busy ? ' disabled' : ''}>测试连接</button>
+        <button class="fl-aic-btn primary" id="fl-aic-save">保存凭据</button>
+        <button class="fl-aic-btn ghost" id="fl-aic-test"${busy ? ' disabled' : ''}>测试连接</button>
         <button class="fl-aic-btn ghost" id="fl-aic-apply"${MODULES.length > 1 ? '' : ' style="display:none"'}>应用到全部</button>
       </div>
 
@@ -141,14 +154,49 @@
 
     const baseI = q('#fl-aic-base');
     const keyI = q('#fl-aic-key');
-    if (baseI) baseI.addEventListener('change', () => {
+
+    /**
+     * 落盘。
+     *
+     * 以前只监听 change，手机上 change 要等失焦才触发——
+     * 输完直接点「拉取列表」或切页，值就丢了。现在 input 也存，逐字落盘。
+     */
+    const commit = (silent) => {
       const c = conf();
-      ai().setConf(cur, { base: baseI.value, key: c.key, model: c.model });
-    });
-    if (keyI) keyI.addEventListener('change', () => {
-      const c = conf();
-      ai().setConf(cur, { base: c.base, key: keyI.value, model: c.model });
-    });
+      const next = {
+        base: baseI ? baseI.value : c.base,
+        key: keyI ? keyI.value : c.key,
+        model: c.model,
+      };
+      const saved = ai().setConf(cur, next);
+      // 回读一次，确认真写进去了
+      const back = ai().getConf(cur);
+      const okSave = back.base === saved.base && back.key === saved.key;
+      if (!okSave && !silent) {
+        err = '凭据没能存进本机存储。可能是浏览器的无痕模式或存储被禁用。';
+        repaint(root);
+      } else if (!silent) {
+        err = '';
+        toastFn('凭据已保存');
+        repaint(root);
+      }
+      return okSave;
+    };
+
+    if (baseI) {
+      baseI.addEventListener('input', () => commit(true));
+      baseI.addEventListener('change', () => commit(true));
+      baseI.addEventListener('blur', () => commit(true));
+    }
+    if (keyI) {
+      keyI.addEventListener('input', () => commit(true));
+      keyI.addEventListener('change', () => commit(true));
+      keyI.addEventListener('blur', () => commit(true));
+    }
+
+    // 显式的保存按钮：手机上点一下最稳
+    const save = q('#fl-aic-save');
+    if (save) save.addEventListener('click', () => commit(false));
 
     root.querySelectorAll('.fl-aic-tab').forEach((n) => {
       n.addEventListener('click', () => {
@@ -172,6 +220,12 @@
         key: keyI ? keyI.value : c.key,
         model: c.model,
       });
+      const back = ai().getConf(cur);
+      if (!back.base || !back.key) {
+        err = '地址或密钥没存进去，先点一次「保存凭据」。';
+        repaint(root);
+        return;
+      }
       busy = 'pull'; err = ''; repaint(root);
       try {
         const ids = await ai().listModels();

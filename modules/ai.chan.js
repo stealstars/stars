@@ -16,6 +16,21 @@
   const STORE_KEY = 'fiefLedger.aichan.v1';
   const TIMEOUT = { models: 20000, chat: 120000 };
 
+  /**
+   * 模块别名。
+   * 设置面板里用中文名「外交」，外交页调 chat() 时传的是 'diplomacy'。
+   * 不归一化就会出现「填了却提示没配置」。
+   */
+  const ALIAS = {
+    diplomacy: '外交',
+    外交档案: '外交',
+    外交: '外交',
+  };
+  function canon(m) {
+    const k = String(m == null || m === '' ? '外交' : m);
+    return ALIAS[k] || k;
+  }
+
   /* ------------------------------------------------------------ 存储 */
   /** 结构：{ modules: { 外交: { base, key, model } }, active: '外交' } */
   function loadAll() {
@@ -37,12 +52,13 @@
 
   function getConf(module) {
     const all = loadAll();
-    return all.modules[module || all.active] || { base: '', key: '', model: '' };
+    const k = canon(module || all.active);
+    return all.modules[k] || { base: '', key: '', model: '' };
   }
 
   function setConf(module, conf) {
     const all = loadAll();
-    const m = module || all.active;
+    const m = canon(module || all.active);
     all.modules[m] = {
       base: String(conf.base || '').trim(),
       key: String(conf.key || '').trim(),
@@ -50,6 +66,18 @@
     };
     saveAll(all);
     return all.modules[m];
+  }
+
+  /** 存不进去时得让用户知道（隐私模式 / 存储满 / 被策略禁掉） */
+  function storeOk() {
+    try {
+      const probe = STORE_KEY + '.probe';
+      window.localStorage.setItem(probe, '1');
+      window.localStorage.removeItem(probe);
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   /* ------------------------------------------------------------ 路径 */
@@ -336,7 +364,7 @@
   }
 
   window.__fiefAI = {
-    loadAll, getConf, setConf, endpoint, maskKey,
+    loadAll, getConf, setConf, endpoint, maskKey, canon, storeOk,
     listModels, chat, extractJson,
     async testWith(conf) {
       const t0 = Date.now();
