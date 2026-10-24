@@ -1,13 +1,13 @@
 {
   "name": "fief-ledger",
   "displayName": "领地档案",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "channel": "stable",
   "schemaVersion": 1,
   "loaderMin": "0.1.0",
   "publishedAt": "2026-10-24",
   "moduleCount": 8,
-  "totalBytes": 302274,
+  "totalBytes": 302955,
   "modules": [
     {
       "path": "modules/policy.data.js",
@@ -18,8 +18,8 @@
     {
       "path": "modules/policy.css.js",
       "desc": "政令样式",
-      "bytes": 22372,
-      "sha256": "82c807e130678d12647dd05c7cf6ac0df492e0a8dfa6adbcd3f0d497b9b6ef7d"
+      "bytes": 15258,
+      "sha256": "5341fa0e1398b502b4880e75564142ba4e6a3d879315173da51a9ee6ee107fac"
     },
     {
       "path": "modules/policy.ui.js",
@@ -54,8 +54,8 @@
     {
       "path": "modules/core.js",
       "desc": "主脚本",
-      "bytes": 210321,
-      "sha256": "552c73e83f7cc5c838be457f5d45605902f068c3f29ca08fbc83f39237e9b862"
+      "bytes": 218116,
+      "sha256": "da06b27778f80c29b53cbffe96834b1a5c2c0971ffe0a3cd8c0c5aace92d8abe"
     }
   ]
 }
