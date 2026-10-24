@@ -170,7 +170,7 @@
   /* ---------------------------------------------------------- 对话 */
   /**
    * @param {string} prompt 用户消息
-   * @param {object} opts { system, temperature, maxTokens, module }
+   * @param {object} opts { system, temperature, maxTokens, module, stream }
    * @returns {Promise<string>} 模型返回的文本
    */
   async function chat(prompt, opts) {
@@ -187,20 +187,34 @@
       model: c.model,
       messages,
       temperature: typeof o.temperature === 'number' ? o.temperature : 0.7,
-      stream: false,
+      stream: !!o.stream,
     };
-    if (o.maxTokens) body.max_tokens = o.maxTokens;
+    // 额度给足：推理型模型（-high / -thinking）的思考过程也算 token，
+    // 给太少会让它话没想完就撞上限，正文是空的
+    body.max_tokens = (typeof o.maxTokens === 'number' && o.maxTokens > 0) ? o.maxTokens : 4000;
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + c.key,
+      Accept: o.stream ? 'text/event-stream' : 'application/json',
+    };
+
+    if (o.stream) return await chatStream(url, headers, body);
+
     const text = await req(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + c.key,
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(body),
+      method: 'POST', headers, body: JSON.stringify(body),
     }, TIMEOUT.chat);
     let data;
     try { data = JSON.parse(text); } catch (e) { throw new Error('返回的不是 JSON：' + text.slice(0, 80)); }
+    return pickText(data);
+  }
+
+  /**
+   * 从返回体里取正文。推理模型的坑：
+   *   content 是空的，真正的话在 reasoning_content 里，且被 max_tokens 截断了。
+   * 这种情况要明确告诉用户换额度或换模型，不要拿思考过程冒充回答。
+   */
+  function pickText(data) {
     const ch = data && data.choices && data.choices[0];
     const msg = ch && (ch.message || ch.delta);
     let out = msg && (typeof msg.content === 'string' ? msg.content : '');
@@ -208,13 +222,85 @@
       // 有些中转把结果放在别处
       if (data && typeof data.content === 'string') out = data.content;
       else if (data && typeof data.output === 'string') out = data.output;
-      else if (data && data.choices && data.choices[0] && typeof data.choices[0].text === 'string') out = data.choices[0].text;
+      else if (ch && typeof ch.text === 'string') out = ch.text;
     }
-    if (!out || !String(out).trim()) {
-      const raw = JSON.stringify(data).slice(0, 200);
-      throw new Error('模型返回空内容：' + raw);
+    if (out && String(out).trim()) return String(out);
+
+    // 到这里说明正文真的是空的。看是不是推理模型吃光了额度
+    const reason = (msg && (msg.reasoning_content || msg.reasoning)) || '';
+    const fin = ch && ch.finish_reason;
+    const used = data && data.usage && data.usage.completion_tokens;
+    if (reason) {
+      throw new Error('这个模型把额度全花在思考上了，正文没吐出来。\n'
+        + '原因：' + (reason.length) + ' 字的推理内容占满了 max_tokens'
+        + (used ? '（已用 ' + used + ' tokens）' : '') + (fin ? '，finish_reason=' + fin : '') + '。\n'
+        + '换一个不带 -high / -thinking 的模型，或换带「假流式」「抗截断」前缀的版本。');
     }
-    return String(out);
+    if (fin === 'length') {
+      throw new Error('输出被 max_tokens 截断了（finish_reason=length），把额度调大，或缩短提示词。');
+    }
+    throw new Error('模型返回空内容：' + JSON.stringify(data).slice(0, 200));
+  }
+
+  /** 流式：有些中转在流式下会把思考过滤掉，只送正文，比非流式稳 */
+  async function chatStream(url, headers, body) {
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), TIMEOUT.chat) : null;
+    try {
+      const res = await fetch(url, Object.assign(
+        { method: 'POST', headers, body: JSON.stringify(body) },
+        ctl ? { signal: ctl.signal } : {},
+      ));
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error('HTTP ' + res.status + '：' + t.slice(0, 160).replace(/\s+/g, ' '));
+      }
+      if (!res.body || typeof res.body.getReader !== 'function') {
+        // 没有 body 流，退回普通解析
+        const t = await res.text();
+        try { return pickText(JSON.parse(t)); } catch (e) { throw e; }
+      }
+      const reader = res.body.getReader();
+      const dec = new TextDecoder('utf-8');
+      let acc = '';
+      let reason = '';
+      let fin = null;
+      let buf = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          const s = line.trim();
+          if (!s || s[0] === ':') continue;
+          if (s.indexOf('data:') !== 0) continue;
+          const payload = s.slice(5).trim();
+          if (!payload || payload === '[DONE]') continue;
+          let o;
+          try { o = JSON.parse(payload); } catch (e) { continue; }
+          const ch = o.choices && o.choices[0];
+          if (!ch) continue;
+          const d = ch.delta || ch.message || {};
+          if (d.content) acc += d.content;
+          if (d.reasoning_content) reason += d.reasoning_content;
+          if (ch.finish_reason) fin = ch.finish_reason;
+        }
+      }
+      if (acc.trim()) return acc;
+      if (reason) {
+        throw new Error('这个模型把额度全花在思考上了，正文没吐出来。\n'
+          + '推理内容 ' + reason.length + ' 字' + (fin ? '，finish_reason=' + fin : '') + '。\n'
+          + '换一个不带 -high / -thinking 的模型。');
+      }
+      throw new Error('流式返回里没有正文（可能被中转过滤了）');
+    } catch (e) {
+      if (e && e.name === 'AbortError') throw new Error('请求超时（' + Math.round(TIMEOUT.chat / 1000) + ' 秒）');
+      throw e;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   /** 从模型返回里抠出 JSON（容忍 ```json 包裹与前后废话） */
@@ -237,10 +323,15 @@
   }
 
   /* ---------------------------------------------------------- 测试 */
+  // 测试连接的额度：推理模型光思考就要几百 token，给少了正文是空的
+  const TEST_MAX_TOKENS = 2000;
+
   async function test(conf) {
     const c = conf || getConf();
     const t0 = Date.now();
-    const r = await chat('只回复两个字：可用', { module: undefined, temperature: 0, maxTokens: 16, system: '' , ...{} });
+    const r = await chat('只回复两个字：可用', {
+      module: undefined, temperature: 0, maxTokens: TEST_MAX_TOKENS,
+    });
     return { ok: true, ms: Date.now() - t0, echo: String(r).slice(0, 40) };
   }
 
@@ -249,9 +340,11 @@
     listModels, chat, extractJson,
     async testWith(conf) {
       const t0 = Date.now();
-      const r = await chat('只回复两个字：可用', Object.assign({}, conf, { temperature: 0, maxTokens: 16 }));
+      const r = await chat('只回复两个字：可用', Object.assign(
+        { temperature: 0, maxTokens: TEST_MAX_TOKENS }, conf,
+      ));
       return { ms: Date.now() - t0, echo: String(r).slice(0, 40) };
     },
-    _test: { endpoint, extractJson, STORE_KEY },
+    _test: { endpoint, extractJson, STORE_KEY, pickText, TEST_MAX_TOKENS },
   };
 })();
