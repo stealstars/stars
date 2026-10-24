@@ -1,7 +1,7 @@
 {
   "name": "fief-ledger",
   "displayName": "领地档案",
-  "version": "0.9.11",
+  "version": "0.9.12",
   "channel": "stable",
   "schemaVersion": 1,
   "loaderMin": "0.1.0",
