@@ -196,10 +196,16 @@
       var raw = list[i];
       var name = typeof raw === 'string' ? raw : (raw && (raw.name || raw.名)) || '';
       var tone = typeof raw === 'object' && raw ? (raw.tone || raw.态度 || '') : '';
+      // note 是原文里名字后面那截（「观望」「戒备」…），label 是归并后的中文名。
+      // 之前只留了 tone（mid/ok 这种内部键），界面上就只能显示 mid。
+      var note = typeof raw === 'object' && raw ? (raw.note || raw.备注 || '') : '';
+      var label = typeof raw === 'object' && raw ? (raw.label || '') : '';
       if (!name) continue;
       out.push({
         name: name,
         tone: tone,
+        note: note,
+        label: label,
         faction: c && c.factions[name] ? c.factions[name] : null,
       });
     }
@@ -233,7 +239,14 @@
       out += '<div class="fl-dw-card' + on + '" data-dw-faction="' + esc(n.name) + '">'
         + '<div class="fl-dw-nm">' + esc(n.name) + '</div>'
         + '<div class="fl-dw-sub">'
-        + (n.tone ? '<span class="fl-dw-tone">' + esc(n.tone) + '</span>' : esc(factionKind(n.name)))
+        // 显示玩家/世界书里的原话（观望、戒备…），不要显示 mid/ok 这种内部键。
+        // note 是原文里名字后面的部分，label 是归并后的中文标签，tone 只是上色用的。
+        + (function () {
+          var shown = n.note || n.label || '';
+          if (!shown && !n.tone) return esc(factionKind(n.name));
+          var cls = n.tone === 'bad' ? ' fl-dw-tone bad' : (n.tone === 'ok' ? ' fl-dw-tone ok' : ' fl-dw-tone');
+          return '<span class="' + cls.trim() + '">' + esc(shown || factionKind(n.name)) + '</span>';
+        })()
         + '</div>'
         + '<div class="fl-dw-cnt">'
         + (cnt ? cnt + ' 处 <i>地点</i>' : '<i>世界书无此地条目</i>')

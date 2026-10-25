@@ -394,6 +394,8 @@
       位置: String((asset && asset.位置) || ''),
       总空间: String((asset && (asset.总空间 || asset.总占用空间)) || ''),
       结算: String((asset && asset.结算) || ''),
+      // 描述正文：外交页要从这里扫 [邻邦] 行，之前没带出来
+      desc,
     };
   }
 
@@ -573,6 +575,28 @@
   }
 
   /* ------------------------------------------------- <fief_domain> 总览 */
+  /**
+   * 从任意文本里扫 [邻邦|名|态度] 行。
+   *
+   * 为什么不复用 parseDomainBlock：那个只认 <fief_domain> 包裹的区块。
+   * 而领地的「描述」字段（变量里）常常直接写 [邻邦] 行，没有区块标签——
+   * 玩家从变量读出来的领地，用 parseDomainBlock 永远拿不到邻邦。
+   */
+  function looseNeighbours(text) {
+    const out = [];
+    const src = String(text || '');
+    if (!src) return out;
+    const re = /\[(?:邻邦|邻国|邻接|接壤)\s*[|｜]\s*([^\]\n|｜]+)(?:\s*[|｜]\s*([^\]\n|｜]+))?/g;
+    let m;
+    while ((m = re.exec(src)) !== null) {
+      const name = String(m[1] || '').trim();
+      if (!name) continue;
+      const tone = String(m[2] || '').trim();
+      out.push(tone ? name + '|' + tone : name);
+    }
+    return out;
+  }
+
   function parseDomainBlock(text) {
     const rows = blockRows(text, 'fief_domain');
     if (!rows.length) return null;
@@ -4129,13 +4153,20 @@
 
   /* ------------------------------------------------------------ 渲染 */
   /** 外交页交给 modules/diplo.ui.js 渲染；它读世界书，不依赖当前领地 */
+  /** 外交页上一次拿到的邻邦（排查用，暴露在 __fiefLedger 里） */
+  let lastDipRows = [];
+  let lastDipDomain = '';
+
   function renderDiplomacy(d) {
     const mod = window.__fiefDiplo;
     if (mod && typeof mod.html === 'function') {
       // 把当前领地的邻邦与档位交给外交页，它自己不去翻变量
       try {
         if (typeof mod.setNeighbours === 'function') {
-          mod.setNeighbours(dipRows(d));
+          const rows = dipRows(d);
+          mod.setNeighbours(rows);
+          lastDipRows = rows;
+          lastDipDomain = d ? d.name : '';
         }
         if (typeof mod.setOwnTier === 'function') {
           mod.setOwnTier(d && d.规模档 ? d.规模档 : '');
@@ -4218,12 +4249,32 @@
   function dipRows(d) {
     const out = [];
     const info = (d && d.info) || {};
-    for (const raw of info.邻邦 || []) {
-      const t = String(raw || '').trim();
+
+    // 邻邦来源有三处，取到为止：
+    //   ① 消息里的 <fief_domain> 区块  （info.邻邦，最权威）
+    //   ② 变量里领地的「描述」字段       （常常直接写 [邻邦] 行，没有区块标签）
+    //   ③ 变量里所有内部资产的描述       （少数写在建筑说明里）
+    // 只看 ① 的话，从变量读出来的领地永远没有邻邦。
+    let raw = (info.邻邦 || []).slice();
+    if (!raw.length) {
+      const parts = [d && d.name];
+      if (d && d.desc) parts.push(d.desc);
+      if (d && d.meta && d.meta.desc) parts.push(d.meta.desc);
+      for (const x of (d && d.items) || []) {
+        if (x && (x.desc || x.description)) parts.push(x.desc || x.description);
+      }
+      raw = looseNeighbours(parts.join('\n'));
+    }
+
+    for (const line of raw) {
+      const t = String(line || '').trim();
       if (!t) continue;
       const m = t.match(/^([^·｜|：:\-—\s（(]+)\s*[·｜|：:\-—（(]?\s*(.*)$/);
       const name = (m ? m[1] : t).replace(/[）)]+$/, '');
       const rest = (m ? String(m[2] || '') : '').replace(/[）)]+$/, '').trim();
+      if (!name) continue;
+      // 去重：同一势力只留一条
+      if (out.some((x) => x.name === name)) continue;
       const tone = dipTone(rest || name);
       out.push({ name, note: rest, tone, label: dipLabel(rest || name) });
     }
@@ -4885,6 +4936,20 @@
       settings: () => (settingsEl ? settingsEl.innerHTML : ''),
       history: () => historyEvents(),
       diplomacy: () => dipRows(currentDomain()),
+      /** 外交页诊断：看邻邦到底取到了什么 */
+      dipInfo: () => {
+        const d = currentDomain();
+        return {
+          当前领地: d ? d.name : '(无)',
+          领地数: data.domains.length,
+          当前序号: domIdx,
+          界面拿到的邻邦: lastDipRows.map((r) => r.name + '（' + (r.note || r.label || '未标') + '）'),
+          界面那次用的是: lastDipDomain,
+          原始邻邦行: (d && d.info && d.info.邻邦) || [],
+          解析后: dipRows(d).map((r) => ({ 名: r.name, 态度原文: r.note, 归并: r.label })),
+          来源: d ? (d.fromBlock ? '消息区块' : (d.fromStore ? '缓存' : '变量')) : '',
+        };
+      },
       hero: () => (heroEl ? heroEl.innerHTML : ''),
       metrics: () => (screen ? screen.querySelector('#fl-metrics').innerHTML : ''),
       drawerHtml: () => (drawerEl ? drawerEl.innerHTML : ''),

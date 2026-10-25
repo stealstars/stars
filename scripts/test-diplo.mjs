@@ -221,21 +221,46 @@ ok('扫到条目', !!sc && sc.count > 500, sc ? String(sc.count) : 'null');
 ok('拆出势力', !!sc && Object.keys(sc.factions).length === 10, sc ? String(Object.keys(sc.factions).length) : '');
 console.log('  条目 ' + sc.count + '，势力 ' + Object.keys(sc.factions).length);
 
-console.log('\n=== 邻邦接入 ===');
+console.log('\n=== 邻邦接入（走真实链路）===');
+// 不用手工 setNeighbours —— 那正是一开始漏掉 bug 的地方。
+// 这里调主脚本的 renderView，让 core 自己从领地 [邻邦] 行传给外交页。
 dip.state.faction = '奥古斯提姆帝国';
 dip.state.place = '';
-// 主脚本在 renderDiplomacy 里塞邻邦；这里直接模拟
-dip.setNeighbours([{ name: '索伦蒂斯王国', tone: '观望' }, { name: '诺斯加德联盟', tone: '戒备' }]);
-dip.setOwnTier('村庄');
+
+// 领地面板要能渲染，得先有个 viewEl。
+// 注意：renderView 里只有 page === '外交' 才走外交分支，默认页是「领地」，
+// 所以要先切页——真实使用中玩家点了外交页签，测试里得模拟这一步。
+win.__fiefLedger._ui.page('外交');
+win.__fiefRenderView();
+ok('已切到外交页', win.__fiefLedger._ui.pageNow() === '外交', win.__fiefLedger._ui.pageNow());
+
+const ledger = win.__fiefLedger;
+const info = ledger && ledger._ui && ledger._ui.dipInfo ? ledger._ui.dipInfo() : null;
+ok('有 dipInfo 诊断', !!info, ledger ? Object.keys(ledger).join(',') : '没有 __fiefLedger');
+if (info) {
+  console.log('  当前领地: ' + info.当前领地);
+  console.log('  原始邻邦行: ' + JSON.stringify(info.原始邻邦行));
+  console.log('  界面拿到: ' + JSON.stringify(info.界面拿到的邻邦));
+  console.log('  来源: ' + info.来源);
+  ok('解析出邻邦', info.解析后.length > 0, JSON.stringify(info.解析后));
+  ok('主脚本把邻邦传给了外交页', info.界面拿到的邻邦.length > 0, JSON.stringify(info.界面拿到的邻邦));
+  // 这条领地是从「变量」读的，没有 <fief_domain> 区块，
+  // 所以 info.邻邦 本来就是空的 —— 邻邦是靠扫「描述」拿到的。
+  // 这正是要守的场景：只有变量时也得有邻邦。
+  if (info.来源 === '变量') {
+    ok('变量来源也能拿到邻邦', info.界面拿到的邻邦.length > 0, '说明只认区块的 bug 又回来了');
+  }
+}
+
 const dbg = dip.debug();
-console.log('  邻邦: ' + dbg.邻邦.join(', '));
-ok('邻邦被接收', dbg.邻邦.length === 2, String(dbg.邻邦.length));
-ok('邻邦关联到世界书', dbg.邻邦.some((x) => /索伦蒂斯王国\(\d+\)/.test(x)), dbg.邻邦.join(','));
+console.log('  外交页侧: ' + dbg.邻邦.join(', '));
+ok('外交页收到了邻邦', dbg.邻邦.length > 0, dbg.邻邦.join(','));
+ok('邻邦关联到世界书', dbg.邻邦.some((x) => /\(\d+\)/.test(x)), dbg.邻邦.join(','));
 
 const html1 = dip.html();
 ok('渲染出邻邦区块', html1.indexOf('邻 邦') >= 0);
 ok('邻邦有索伦蒂斯', html1.indexOf('索伦蒂斯王国') >= 0);
-ok('邻邦有态度标签', html1.indexOf('fl-dw-tone') >= 0 || html1.indexOf('观望') >= 0);
+ok('邻邦有态度', html1.indexOf('观望') >= 0 || html1.indexOf('戒备') >= 0);
 
 /* ---------------- 地点与原文 ---------------- */
 console.log('\n=== 地点列表 ===');
