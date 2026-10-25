@@ -290,6 +290,23 @@ const html4 = dip.html();
 ok('从缓存读回档案', html4.indexOf('城卫军') >= 0);
 ok('列表标了已建档', html4.indexOf('已建档') >= 0);
 
+/* ---------------- 看原文（真出过的 bug） ---------------- */
+console.log('\n=== 「看原文」按钮 ===');
+// 守的是：只清 S.profile，渲染时会从缓存把档案读回来，点了等于没点
+dip.state.profile = null;
+ok('清内存后仍显示档案', dip.html().indexOf('城卫军') >= 0);
+
+dip.state.showRaw = true;
+const rawHtml = dip.html();
+ok('看原文后不再显示档案', rawHtml.indexOf('城卫军') < 0, '仍显示档案');
+ok('看原文显示世界书原文', rawHtml.indexOf('世界书 ·') >= 0);
+ok('看原文有返回入口', rawHtml.indexOf('data-dw-act="back"') >= 0);
+ok('看原文有重新建档', rawHtml.indexOf('data-dw-act="again"') >= 0);
+ok('看原文不再给裸「建档」', rawHtml.indexOf('>建档<') < 0);
+
+dip.state.showRaw = false;
+ok('返回后又能看到档案', dip.html().indexOf('城卫军') >= 0);
+
 /* ---------------- 失败路径 ---------------- */
 console.log('\n=== 失败路径 ===');
 dip.state.profile = null;

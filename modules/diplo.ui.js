@@ -30,6 +30,7 @@
     profile: null,      // 当前地点的 AI 档案
     busy: false,
     err: '',
+    showRaw: false,     // 用户点了「看原文」，暂时盖住 AI 档案
     ready: false,       // 世界书扫完了没有
     scanning: false,
     scanErr: '',
@@ -470,12 +471,20 @@
       + '<span style="opacity:.6;letter-spacing:.04em">世界书 · ' + p.len + ' 字</span></div>'
       + '<div class="fl-pf-raw">' + esc(p.content) + '</div></div>';
 
+    // 已经有档案时，「建档」改成「看档案」，不再白跑一次 API
+    var hasProfile = !!(S.profile || cacheGet(p.faction, p.name));
     html += '<div class="fl-pf-acts">'
-      + '<button class="fl-pf-btn primary" data-dw-act="build">建档</button>'
+      + (hasProfile
+        ? '<button class="fl-pf-btn primary" data-dw-act="back">看档案</button>'
+          + '<button class="fl-pf-btn" data-dw-act="again">重新建档</button>'
+        : '<button class="fl-pf-btn primary" data-dw-act="build">建档</button>')
       + '<button class="fl-pf-btn" data-dw-act="copy">复制原文</button>'
       + '</div>';
 
-    html += '<div class="fl-pf-note">现在是世界书原文。点「建档」让 AI 按领地扩展的格式整理成档案。'
+    html += '<div class="fl-pf-note">现在是世界书原文。'
+      + (hasProfile
+        ? '这份地点已经建过档，点「看档案」回去。'
+        : '点「建档」让 AI 按领地扩展的格式整理成档案。')
       + '</div>';
     html += '</div>';
     return html;
@@ -504,6 +513,9 @@
     if (!p) return '';
     if (S.busy) return renderBusy();
     if (S.err) return renderError();
+    // 点了「看原文」：S.showRaw 为真时无视内存与缓存，
+    // 否则清掉 S.profile 也会被下面这句从缓存里读回来，界面看着像没反应
+    if (S.showRaw) return renderRawProfile(p);
     var a = S.profile || cacheGet(p.faction, p.name);
     if (a && a.领地) return renderAiProfile(p, a);
     return renderRawProfile(p);
@@ -667,6 +679,7 @@
           S.profile = null;
           S.err = '';
           S.busy = false;
+          S.showRaw = false;
         }
         savePref();
         rerender(root);
@@ -681,6 +694,7 @@
           S.profile = null;
           S.err = '';
           S.busy = false;
+          S.showRaw = false;
         }
         savePref();
         rerender(root);
@@ -710,12 +724,19 @@
 
         if (kind === 'build' || kind === 'again') {
           var f2 = currentFaction();
+          S.showRaw = false;
           if (kind === 'again' && f2) cacheDrop(f2.name, p.name);
           buildProfile();
           return;
         }
         if (kind === 'raw') {
-          S.profile = null; S.err = ''; S.busy = false;
+          // 不能只清 S.profile —— 渲染时会从缓存再读回来，点了等于没点
+          S.showRaw = true; S.err = ''; S.busy = false;
+          rerender(root);
+          return;
+        }
+        if (kind === 'back') {
+          S.showRaw = false; S.err = '';
           rerender(root);
           return;
         }
