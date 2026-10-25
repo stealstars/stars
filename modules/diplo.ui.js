@@ -32,6 +32,7 @@
     err: '',
     showRaw: false,     // 用户点了「看原文」，暂时盖住 AI 档案
     ready: false,       // 世界书扫完了没有
+    scanned: false,     // 至少扫过一次（不管扫到几条）——0 条也不能反复重扫
     scanning: false,
     scanErr: '',
     mode: '',           // '' | 'ai'
@@ -139,17 +140,20 @@
     try {
       b.scan(false).then(function (c) {
         S.scanning = false;
+        S.scanned = true;
         S.ready = !!(c && c.count);
         S.scanErr = c && c.err ? c.err : '';
         rerender(null);
       }).catch(function (e) {
         S.scanning = false;
+        S.scanned = true;
         S.ready = false;
         S.scanErr = (e && e.message) || String(e);
         rerender(null);
       });
     } catch (e) {
       S.scanning = false;
+      S.scanned = true;
       S.ready = false;
       S.scanErr = (e && e.message) || String(e);
     }
@@ -163,11 +167,13 @@
     rerender(null);
     b.scan(true).then(function (c) {
       S.scanning = false;
+      S.scanned = true;
       S.ready = !!(c && c.count);
       S.scanErr = c && c.err ? c.err : '';
       rerender(null);
     }).catch(function (e) {
       S.scanning = false;
+      S.scanned = true;
       S.scanErr = (e && e.message) || String(e);
       rerender(null);
     });
@@ -599,7 +605,8 @@
     }
 
     // 还没开始扫 → 起一个，先把界面画成「读取中」
-    if (!S.ready && !S.scanning && !S.scanErr) { ensureScan(); }
+    // 注意：扫完了但 0 条时不能再触发，否则永远停在「读取中」，看不到诊断表
+    if (!S.ready && !S.scanning && !S.scanErr && !S.scanned) { ensureScan(); }
 
     if (S.scanning) {
       return '<div class="fl-dw-load"><b>读 取 世 界 书</b>'

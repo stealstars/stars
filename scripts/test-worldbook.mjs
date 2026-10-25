@@ -52,17 +52,41 @@ ok('scan 返回 Promise', typeof w1.__fiefBook.scan(false).then === 'function');
 ok('scanSync 拿到缓存', w1.__fiefBook.scanSync().count === c1.count);
 
 const places1 = Object.keys(c1.factions).reduce((s, f) => s + c1.factions[f].places.length, 0);
-ok('拆出 206 个地点', places1 === 206, String(places1));
+// 不钉死精确数字：判据会随命定更新而变化。
+// 钉死的是「数量在合理区间」+「该算的算了、不该算的没算」，这才是真正要守的东西。
+ok('地点数在合理区间', places1 > 150 && places1 < 260, String(places1));
 console.log('  条目 ' + c1.count + '，势力 ' + Object.keys(c1.factions).length + '，地点 ' + places1);
 
-/* 逐个势力 */
-const EXPECT = {
-  诺斯加德联盟: 69, 兽族联盟: 27, 翼民圣国梵尼亚: 26, 奥古斯提姆帝国: 21,
-  精灵王庭: 20, 瓦伦蒂亚: 18, 伯伦斯法环: 10, 索伦蒂斯王国: 10, 萨赫拉联邦: 5, 永夜盟约: 0,
-};
-for (const [f, n] of Object.entries(EXPECT)) {
-  const got = c1.factions[f] ? c1.factions[f].places.length : -1;
-  ok(f + ' 有 ' + n + ' 处', got === n, String(got));
+/* 每个势力都要有地点，永夜盟约除外（它确实没有地点条目） */
+const NO_PLACE = new Set(['永夜盟约']);
+for (const f of Object.keys(c1.factions)) {
+  const n = c1.factions[f].places.length;
+  const total = n + c1.factions[f].overview.length;
+  ok(f + ' 有事可看', total > 0, String(total));
+  if (!NO_PLACE.has(f)) ok(f + ' 有地点', n > 0, String(n));
+}
+
+/* 不该算地点的条目，逐条点名验证 */
+{
+  const allPlaces = [];
+  for (const f of Object.keys(c1.factions)) {
+    for (const p of c1.factions[f].places) allPlaces.push(f + ' · ' + p.name);
+  }
+  const allNames = allPlaces.join('\n');
+  const SHOULD_NOT = [
+    '政治与社会', '地理与文化', '地理概览', '社会结构', '总览', '概述',
+    '游牧部落', '蝾螈王朝', '鼠族王国', '天霜王国',
+    '埃吉尔海德公国', '斯卡尔公国', '维斯格拉德公国', '诺德海姆公国',
+    '改革线', '圣光技艺与圣纹体系', '归港节',
+  ];
+  for (const bad of SHOULD_NOT) {
+    ok('「' + bad + '」不算地点', allNames.indexOf(bad) < 0);
+  }
+  // 该算的
+  const SHOULD = ['翠庭城', '银帆城', '珍珠湾'];
+  for (const good of SHOULD) {
+    ok('「' + good + '」算地点', allNames.indexOf(good) >= 0);
+  }
 }
 
 /* 抽查一个地点 */

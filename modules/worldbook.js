@@ -54,9 +54,15 @@
       var content = String(e.content != null ? e.content : '');
       if (!content.trim()) continue;
 
-      // 酒馆助手给 name；卡片导出给 comment；原生给 comment 或 name
-      var title = e.comment != null ? e.comment
-        : (e.name != null ? e.name : (e.title != null ? e.title : ''));
+      // 酒馆助手的正式字段是 name；卡片导出格式用 comment。
+      // 不能写成「comment != null 就用它」——酒馆助手常给出 comment:''，
+      // 那样真名字就丢了，条目会变成「(总述)」并被归错类。
+      var title = '';
+      var cands = [e.name, e.comment, e.title];
+      for (var ci = 0; ci < cands.length; ci += 1) {
+        var v = cands[ci];
+        if (v != null && String(v).trim()) { title = String(v); break; }
+      }
 
       // 酒馆助手把关键字放在 strategy.keys
       var keys = [];
@@ -227,6 +233,29 @@
   var NOT_PLACE_TAG = /^(派系|节庆|分割线|组织|制度|人物|角色|传说)$/;
 
   /**
+   * 认地点：正文里的**字段名**才是最有辨识度的证据。
+   *
+   * 拿真实命定世界书统计过：
+   *   地点条目必有 位置(132) / 环境(122) / 地理(39) / 气候(33) / 生态(24) / 地标(27)
+   *   势力条目写    首府 / 领土 / 主要城市 / 统治者 / 主要贵族
+   *   事件条目写    引子 / 各方态度 / 当前知情范围
+   *   概念条目写    来源 / 核心特征 / 分类与特质
+   * 所以「有没有地理字段」比「名字像不像地名」准得多。
+   */
+  var GEO_FIELD = /(?:^|[\n|｜])\s*(位置|环境|地理|气候|生态|地标|地形|水文|植被|人口构成|城区|行政区划|主要地形)\s*[:：]/g;
+
+  /** 势力条目才有的字段——出现这些多半不是地点，但要看数量对比 */
+  var FACTION_FIELD = /(?:^|[\n|｜])\s*(首府|领土|核心领土|统治者|主要贵族|主要城市|部落规模|宗旨|行事风格)\s*[:：]/g;
+
+  function countHits(re, s) {
+    var m = String(s || '').match(re);
+    return m ? m.length : 0;
+  }
+
+  /** 兜底：名字像不像地名 */
+  var GEO_NAME = /(城|镇|村|堡|要塞|港|湾|岛|群岛|山脉|山|岭|峰|林|谷|平原|荒原|沙漠|沼|湖|河|海|洋|洲|地标|街区|城区|区|街|巷|道|坊|广场|营地|聚落|关隘|塔|院|寺|殿|宫|馆|铺|市|集|桥|门|壁|营|厂|矿|田|园|庄|领|郡|省|州|甸|崖|坡|源|口|渡|驿|栈|屋|厅|堂|台|庭|域|壤|地|脊|礁|屿|港|池|泉|井|坑|穴|洞|林|苑|圃|坛|场|基|址)/;
+
+  /**
    * 认地点的核心判据：条目正文里有「规模:」或「地点类别:」。
    *
    * 命定的地点条目写法不统一，同一件事有三种叫法：
@@ -275,10 +304,34 @@
         isPlace: false,
       };
 
+      /**
+       * 地点要同时满足：
+       *   ① 名字和子标签都不像「政治与社会」「人物」这类非地点条目
+       *   ② 名字不等于势力名（那条是势力总述）
+       *   ③ 正文给了规模，或子标签本身就是地理类（城镇/城区/地标…）
+       *
+       * 以前写成 (!!scale || !!sp.name)，而 sp.name 几乎永远为真，
+       * 等于只看了 ①② —— 任何有名字的条目都会被当成地点。
+       */
       var byName = NOT_PLACE.test(sp.name);
       var byTag = sp.tags.some(function (t) { return NOT_PLACE_TAG.test(t); });
-      var bySelf = sp.name === sp.faction;
-      node.isPlace = !byName && !byTag && !bySelf && (!!scale || !!sp.name);
+      var bySelf = sp.name === sp.faction || !sp.name;
+      var body = String(e.content || '');
+      var geoN = countHits(GEO_FIELD, body);
+      var facN = countHits(FACTION_FIELD, body);
+      // 证据从强到弱：
+      //   ① 正文写了「规模:」              → 一定是地点
+      //   ② 地理字段多于势力字段           → 地点
+      //      （「联盟直辖区」同时有 首府/领土 和 位置/环境，按数量判它还是地点）
+      //   ③ 名字像地名且没有势力字段       → 兜底
+      var geoName = GEO_NAME.test(sp.name);
+      var byField = geoN > 0 && geoN >= facN;
+      // 名字明确是地理单元（「联盟直辖区」「XX区」「XX公国领地」）——
+      // 这类条目常借用势力的字段格式（首府/领土/统治者），但读的人要把它当地点看
+      var strongName = /(直辖区|辖区|辖区|区|省|郡|州|领|地块|半岛|群岛|盆地|高原|平原|山脉)$/.test(sp.name);
+      node.isPlace = !byName && !byTag && !bySelf
+        && (!!scale || byField || strongName || (geoName && facN === 0));
+      node.why = scale ? 'scale' : (byField ? 'field' : (strongName ? 'strongname' : (geoName && facN === 0 ? 'name' : '')));
 
       if (node.isPlace) factions[sp.faction].places.push(node);
       else factions[sp.faction].overview.push(node);

@@ -3149,16 +3149,24 @@
     inkColor = screen.querySelector('#fl-ink-color');
 
     const syncLookUI = () => {
-      const cur = String(prefs.accent || DEFAULT_ACCENT).toLowerCase();
-      if (themeColor && themeColor.value.toLowerCase() !== cur) themeColor.value = cur;
-      paletteEl.querySelectorAll('.fl-opt[data-accent]').forEach((b) => {
-        b.classList.toggle('on', String(b.dataset.accent).toLowerCase() === cur);
-      });
-      const ink = String(prefs.text || 'auto').toLowerCase();
-      if (inkColor && prefs.text && inkColor.value.toLowerCase() !== ink) inkColor.value = ink;
-      inkEl.querySelectorAll('.fl-opt[data-ink]').forEach((b) => {
-        b.classList.toggle('on', String(b.dataset.ink).toLowerCase() === ink);
-      });
+      // 一律先 String() 再 toLowerCase：input.value 在个别情况下是 undefined，
+      // 真机里见过样式被改写后 querySelector 拿到非 input 元素的情形，
+      // 那样整个面板会因为这一行建不起来。
+      const low = (v) => String(v == null ? '' : v).toLowerCase();
+      const cur = low(prefs.accent || DEFAULT_ACCENT);
+      if (themeColor && low(themeColor.value) !== cur) themeColor.value = cur;
+      if (paletteEl && paletteEl.querySelectorAll) {
+        paletteEl.querySelectorAll('.fl-opt[data-accent]').forEach((b) => {
+          b.classList.toggle('on', low(b.dataset.accent) === cur);
+        });
+      }
+      const ink = low(prefs.text || 'auto');
+      if (inkColor && prefs.text && low(inkColor.value) !== ink) inkColor.value = ink;
+      if (inkEl && inkEl.querySelectorAll) {
+        inkEl.querySelectorAll('.fl-opt[data-ink]').forEach((b) => {
+          b.classList.toggle('on', low(b.dataset.ink) === ink);
+        });
+      }
     };
 
     const pickAccent = (hex, tip) => {

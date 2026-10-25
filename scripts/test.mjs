@@ -168,7 +168,9 @@ ok('外交提示词挂在 __fiefPrompts', !!win.__fiefPrompts && !!win.__fiefPro
   ok('物产截到 4 项', over.物产.length === 4, String(over.物产.length));
   ok('要事截到 3 条', over.要事.length === 3, String(over.要事.length));
   ok('人口被截断', over.人口.length <= 21, String(over.人口.length));
-  ok('物资兜底', over.物资 === '尚可');
+  // 物资按领地扩展世界书只有四档：充盈 / 充足 / 告急 / 绝粮
+  ok('物资兜底', over.物资 === '充足', over.物资);
+  ok('物资收进四档', ['充盈', '充足', '告急', '绝粮'].indexOf(over.物资) >= 0, over.物资);
   ok('态度兜底', over.治下.态度 === '观望', over.治下.态度);
   ok('物产数量兜底', over.物产[0].数量 === '中', over.物产[0].数量);
 }
