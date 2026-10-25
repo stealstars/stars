@@ -29,6 +29,18 @@
   const TIMEOUT = { manifest: 20000, module: 60000 };
   const INSTANCE_KEY = '__fiefLoader';
 
+  /**
+   * 加载器自身的版本。改了 loader.js 就把这个数字加一。
+   *
+   * 加这个是为了「不用重新导入」：酒馆里那份 loader.js 是导入那一刻固化下来的，
+   * 模块更新能靠刷新拉到，但 loader.js 自己的改动拉不到。所以启动时先问线上
+   * 有没有更新的 loader.js，有就动态装一份，用新的跑。
+   *
+   * 自更新只是「这次运行用新版」——酒馆里存的那份还是旧的，但它会一直自我更新，
+   * 所以再也不用动导入。等哪天想彻底同步，再导一次即可。
+   */
+  const LOADER_VERSION = '2';
+
   const state = {
     disposed: false,
     phase: 'idle',        // idle | loading | ready | error
@@ -37,6 +49,8 @@
     modules: [],
     error: null,
     startedAt: 0,
+    selfUpdated: false,   // 是否已经把自己交给线上更新的版本
+    loaderVersion: LOADER_VERSION,
   };
 
   // 重复导入先清旧的
@@ -273,11 +287,84 @@
     });
   }
 
+  /**
+   * 自更新：线上 loader.js 比本地新就装新的，用它跑一次。
+   *
+   * 判定用的是 loader.js 开头那行 `const LOADER_VERSION = 'N';`，
+   * 不走 manifest——manifest 的版本是模块版本，跟加载器本身无关。
+   *
+   * 失败一律当作「不用更新」，绝不让自更新挡住正常加载。
+   */
+  async function selfUpdate() {
+    // 已经自更新过就不再套娃
+    if (state.selfUpdated) return false;
+
+    const re = /const\s+LOADER_VERSION\s*=\s*['"](\d+)['"]/;
+    const bases = SOURCES.slice();
+    let best = null;
+
+    for (const base of bases) {
+      try {
+        const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+        const timer = ctl ? setTimeout(() => ctl.abort(), TIMEOUT.manifest) : null;
+        let res;
+        try {
+          res = await fetch(baseOf(base) + 'loader.js?v=' + Date.now(), Object.assign(
+            { cache: 'no-store', credentials: 'omit' },
+            ctl ? { signal: ctl.signal } : {},
+          ));
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+        if (!res.ok) continue;
+        const text = await res.text();
+        const m = text.match(re);
+        if (!m) continue;
+        if (!best || Number(m[1]) > Number(best.ver)) best = { ver: m[1], text };
+      } catch (e) { /* 这个源不行，换下一个 */ }
+    }
+
+    if (!best || Number(best.ver) <= Number(LOADER_VERSION)) return false;
+
+    log('加载器可自更新：本地 v' + LOADER_VERSION + ' → 线上 v' + best.ver);
+    try {
+      // 先把自己注销，新的一份会接管
+      state.selfUpdated = true;
+      state.disposed = true;
+      if (window[INSTANCE_KEY] === state) delete window[INSTANCE_KEY];
+
+      const blob = new Blob([best.text], { type: 'text/javascript' });
+      const url = URL.createObjectURL(blob);
+      await new Promise((resolve, reject) => {
+        const el = document.createElement('script');
+        // 打个标记，好和模块脚本区分开（测试要看注入的是谁）
+        el.setAttribute('data-fief-loader', best.ver);
+        el.src = url;
+        el.onload = () => { URL.revokeObjectURL(url); resolve(); };
+        el.onerror = () => { URL.revokeObjectURL(url); reject(new Error('新加载器注入失败')); };
+        (document.head || document.documentElement).appendChild(el);
+      });
+      return true;
+    } catch (e) {
+      // 失败了就把自己恢复回来，继续用旧的干活
+      state.disposed = false;
+      state.selfUpdated = false;
+      window[INSTANCE_KEY] = state;
+      log('自更新失败，继续用本地 v' + LOADER_VERSION + '：' + ((e && e.message) || e));
+      return false;
+    }
+  }
+
   async function load() {
     if (state.phase === 'loading') return;
     state.startedAt = Date.now();
     setPhase('loading', null);
     try {
+      // 先看要不要换掉自己；换成新的了就不再往下走（新的会自己 load）
+      if (await selfUpdate()) {
+        log('已交给新加载器');
+        return;
+      }
       const { manifest, fromCache } = await loadManifest();
       state.version = manifest.version;
       log('v' + manifest.version + '，共 ' + manifest.modules.length + ' 个模块');
@@ -332,6 +419,8 @@
     modules: state.modules.slice(),
     error: state.error,
     ms: state.startedAt ? Date.now() - state.startedAt : 0,
+    loaderVersion: LOADER_VERSION,
+    selfUpdated: state.selfUpdated,
   });
 
   window[INSTANCE_KEY] = state;
