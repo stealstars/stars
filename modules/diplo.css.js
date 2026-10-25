@@ -136,6 +136,25 @@
   border-color: rgba(212, 175, 90, .4);
 }
 
+/* 子地点：左边一个折线，字号略小，表明它在谁的下面 */
+.fl-dp-sub {
+  border-left: 1px solid rgba(212, 175, 90, .18);
+  margin-left: 6px;
+  border-radius: 0 7px 7px 0;
+}
+
+.fl-dp-br {
+  font-size: 11px;
+  opacity: .35;
+  flex: 0 0 auto;
+  line-height: 1.5;
+}
+
+.fl-dp-sub .fl-dp-nm {
+  font-size: 12.5px;
+  opacity: .92;
+}
+
 .fl-dp-nm {
   font-size: 13px;
   color: var(--fl-ink);

@@ -292,6 +292,51 @@
 
   var PAGE = 14;
 
+  /**
+   * 地点列表。
+   *
+   * 世界书的条目名是有层级的：
+   *   [兽族联盟][风信子城][皇城区]枢机厅
+   * 风信子城 → 皇城区 → 枢机厅 是三级。以前全平铺，一屏几十个平级条目，
+   * 看不出谁属于谁。现在按 parent 排成树，子项缩进。
+   */
+  function placeTree(f) {
+    var byName = {};
+    var i;
+    for (i = 0; i < f.places.length; i += 1) byName[f.places[i].name] = f.places[i];
+    var kids = {};
+    var roots = [];
+    for (i = 0; i < f.places.length; i += 1) {
+      var p = f.places[i];
+      // parent 指向自己、或指向不存在的条目，就当顶层
+      if (p.parent && p.parent !== p.name && byName[p.parent]) {
+        if (!kids[p.parent]) kids[p.parent] = [];
+        kids[p.parent].push(p);
+      } else {
+        roots.push(p);
+      }
+    }
+    // 展平成一串 {node, depth}
+    var flat = [];
+    var walk = function (node, depth, guard) {
+      if (guard > 12) return;   // 数据成环时别把页面拖死
+      flat.push({ node: node, depth: depth });
+      var cs = kids[node.name];
+      if (!cs || !cs.length) return;
+      for (var k = 0; k < cs.length; k += 1) walk(cs[k], depth + 1, guard + 1);
+    };
+    for (i = 0; i < roots.length; i += 1) walk(roots[i], 0, 0);
+    // 万一有条目在环里没被走到，补在最后，免得整条消失
+    if (flat.length < f.places.length) {
+      var seen = {};
+      for (i = 0; i < flat.length; i += 1) seen[flat[i].node.name] = true;
+      for (i = 0; i < f.places.length; i += 1) {
+        if (!seen[f.places[i].name]) flat.push({ node: f.places[i], depth: 0 });
+      }
+    }
+    return flat;
+  }
+
   function renderPlaces() {
     var f = currentFaction();
     if (!f) return '';
@@ -301,13 +346,17 @@
         + '想看它治下的一处地方，可以去世界书里找它的城镇条目。'
         + '</div></div>';
     }
-    var show = S.expanded[f.name] ? f.places.length : Math.min(PAGE, f.places.length);
+    var flat = placeTree(f);
+    var show = S.expanded[f.name] ? flat.length : Math.min(PAGE, flat.length);
     var out = '<div class="fl-dp-list">';
     for (var i = 0; i < show; i += 1) {
-      var p = f.places[i];
+      var p = flat[i].node;
+      var depth = flat[i].depth;
       var on = p.name === S.place ? ' on' : '';
       var hit = cacheGet(f.name, p.name);
-      out += '<div class="fl-dp-row' + on + '" data-dw-place="' + esc(p.name) + '">'
+      var pad = depth > 0 ? ' style="padding-left:' + (10 + depth * 13) + 'px"' : '';
+      out += '<div class="fl-dp-row' + on + (depth > 0 ? ' fl-dp-sub' : '') + '" data-dw-place="' + esc(p.name) + '"' + pad + '>'
+        + (depth > 0 ? '<span class="fl-dp-br">└</span>' : '')
         + '<span class="fl-dp-nm">' + esc(p.name) + '</span>'
         + (p.scale ? '<span class="fl-dp-tag">' + esc(p.scale) + '</span>' : '')
         + (hit ? '<span class="fl-dp-tag" style="opacity:.6">已建档</span>' : '')
@@ -315,8 +364,8 @@
         + '</div>';
     }
     out += '</div>';
-    if (f.places.length > PAGE) {
-      var rest = f.places.length - show;
+    if (flat.length > PAGE) {
+      var rest = flat.length - show;
       out += '<div class="fl-dp-more" data-dw-more="' + esc(f.name) + '">'
         + (rest > 0 ? '还有 ' + rest + ' 处 · 展开全部' : '收起')
         + '</div>';

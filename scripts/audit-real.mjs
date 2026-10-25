@@ -79,8 +79,17 @@ for (const k of Object.keys(tree)) {
   for (const o of tree[k].overview) ov.push({ f: k, o });
 }
 console.log('\n归为总述、但可能其实是地点的条目:');
+// 只报「看起来像地点、而且像地点档案」的：
+//   · 名字带地名后缀
+//   · 正文够长（5 个字的纯标题没法看，归总述是对的）
+//   · 标签不是明确排除的类型（分割线/节庆/人物…）
+const NOISE_TAG = /^(分割线|节庆|人物|角色|组织|制度|传说|事件)$/;
 const suspicious = ov.filter((x) => {
   const nm = x.o.name;
+  const len = Number(x.o.len) || 0;
+  if (len < 40) return false;                       // 纯标题，不算误判
+  const tags = (x.o.tags || []).join(',');
+  if (NOISE_TAG.test(tags)) return false;           // 节庆/分割线这些本就不是地点
   return /区|街|巷|店|铺|院|营|团|岛|岭|湾|港|城|镇|村|堡|塔|门|桥|道/.test(nm)
     && !/政治与社会|地理|文化|总览|概览|家族|廷臣|学塔|骑团|同盟|侍院/.test(nm);
 });

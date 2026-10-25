@@ -283,6 +283,31 @@
 
   function buildFactionTree(entries) {
     var factions = {};
+
+    // 先摸一遍：哪些 tag 其实是「子势力」名。
+    // 判据：这个 tag 自己就是一个条目的名字，而且那条目不是地点。
+    //   [兽族联盟][鼠族王国]鼠族王国      ← 鼠族王国 是子势力，条目本身是势力总述
+    //   [兽族联盟][风信子城]风信子城      ← 风信子城 是地点，条目写「规模:」
+    // 不做这一步的话，「鼠族王国」会被当成枢机厅的上级地点。
+    var subFactions = {};
+    var i0;
+    for (i0 = 0; i0 < entries.length; i0 += 1) {
+      var s0 = splitFactionTag(entries[i0].comment);
+      if (!s0 || !s0.name) continue;
+      if (placeScale(entries[i0].content)) continue;          // 有规模 = 地点，不是势力
+      var b0 = String(entries[i0].content || '');
+      if (countHits(FACTION_FIELD, b0) > 0) subFactions[s0.name] = true;
+    }
+    var SUB_FACTION = function (t) { return !!subFactions[t]; };
+
+    /**
+     * 这些 tag 是**类型标签**，不是上级地点名。
+     *   [精灵王庭][地块]中央平原区          ← 「地块」是类型
+     *   [诺斯加德联盟][城镇]林歌城          ← 「城镇」是类型
+     * 当成父级会造出一堆指向不存在条目的孤儿。
+     */
+    var TYPE_TAG = /^(地块|城镇|城市|村落|村庄|乡镇|要塞|港口|军港|圣所|大型城市|中型城镇|小型村镇|超级城市|小国|行省|帝国行省|势力|本体|地点|地标|城区|区域|聚落|营地|关隘|遗迹|胜景|建筑|设施|分割线|节庆|事件|人物|角色|组织|制度|传说|派系|经济|军事|文化|地理|历史)$/;
+
     for (var i = 0; i < entries.length; i += 1) {
       var e = entries[i];
       var sp = splitFactionTag(e.comment);
@@ -332,6 +357,30 @@
       node.isPlace = !byName && !byTag && !bySelf
         && (!!scale || byField || strongName || (geoName && facN === 0));
       node.why = scale ? 'scale' : (byField ? 'field' : (strongName ? 'strongname' : (geoName && facN === 0 ? 'name' : '')));
+
+      /**
+       * 层级：条目名里的方括号是有顺序的。
+       *   [本体][势力][兽族联盟][鼠族王国][风信子城][皇城区]枢机厅
+       *                    faction        tags[0]   tags[1]  tags[2]  name
+       * 从右往左看 tags，第一个不是子势力的，就是直接上级地点。
+       * 「鼠族王国」这类是子势力（下面还会再出现地点），跳过。
+       */
+      var parent = '';
+      for (var ti = sp.tags.length - 1; ti >= 0; ti -= 1) {
+        var tk = String(sp.tags[ti] || '');
+        if (!tk) continue;
+        if (NOT_PLACE_TAG.test(tk)) break;
+        // 类型标签不是上级地名：[精灵王庭][城镇]林歌城
+        if (TYPE_TAG.test(tk)) continue;
+        // 自指：条目名和 tag 一样（[风信子城]风信子城），那是重复标注，跳过
+        if (tk === sp.name) continue;
+        // 子势力名：本势力下所有条目都带这个 tag，且它本身也是势力条目
+        if (SUB_FACTION && SUB_FACTION(tk)) continue;
+        parent = tk;
+        break;
+      }
+      node.parent = parent;
+      node.depth = parent ? 2 : 1;
 
       if (node.isPlace) factions[sp.faction].places.push(node);
       else factions[sp.faction].overview.push(node);
