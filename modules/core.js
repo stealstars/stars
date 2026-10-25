@@ -582,18 +582,68 @@
    * 而领地的「描述」字段（变量里）常常直接写 [邻邦] 行，没有区块标签——
    * 玩家从变量读出来的领地，用 parseDomainBlock 永远拿不到邻邦。
    */
+  /**
+   * 从自由文本里捞邻邦。
+   *
+   * 实际会遇到四种写法，之前只认第一种，所以玩家在界面上根本看不到邻邦：
+   *   [邻邦|灰岩镇|观望]        方括号 + 竖线
+   *   [邻邦: 黑骆驼商会]        方括号 + 冒号
+   *   邻邦：萨赫拉联邦（戒备）   没括号 + 全角冒号
+   *   【邻邦】断角猎团          方头括号
+   */
   function looseNeighbours(text) {
     const out = [];
     const src = String(text || '');
     if (!src) return out;
-    const re = /\[(?:邻邦|邻国|邻接|接壤)\s*[|｜]\s*([^\]\n|｜]+)(?:\s*[|｜]\s*([^\]\n|｜]+))?/g;
+    const KEY = '邻邦|邻国|邻接|接壤|邻近势力|周边势力|相邻势力';
+
+    const push = (name, tone) => {
+      const nm = String(name || '').replace(/^[\s|｜:：·•\-—]+/, '')
+        .replace(/[\s|｜:：·•\-—\]】)），,、;；]+$/, '').trim();
+      if (!nm) return;
+      if (out.some((x) => x.split('|')[0] === nm)) return;
+      const tn = String(tone || '')
+        .replace(/^[\s|｜:：·•\-—]+/, '')
+        .replace(/[\s|｜:：·•\-—\]】)），,、;；]+$/, '').trim();
+      out.push(tn ? nm + '|' + tn : nm);
+    };
+
+    // ① 方括号式：[邻邦|名|态度] [邻邦: 名] 【邻邦】名
+    const reBracket = new RegExp(
+      '[\\[【]\\s*(?:' + KEY + ')\\s*[\\]】]?\\s*([^\\]】\\n]*)', 'g',
+    );
     let m;
-    while ((m = re.exec(src)) !== null) {
-      const name = String(m[1] || '').trim();
-      if (!name) continue;
-      const tone = String(m[2] || '').trim();
-      out.push(tone ? name + '|' + tone : name);
+    while ((m = reBracket.exec(src)) !== null) {
+      const chunk = String(m[1] || '').trim().replace(/^[|｜:：]\s*/, '');
+      if (!chunk) continue;
+      // 竖线式是「名|态度」，正好一或两段，直接配对，不要当并列拆
+      if (/[|｜]/.test(chunk)) {
+        const seg = chunk.split(/[|｜]/).map((x) => x.trim()).filter(Boolean);
+        if (seg.length >= 2) push(seg[0], seg[1]);
+        else if (seg.length === 1) push(seg[0], '');
+        continue;
+      }
+      for (const raw of chunk.split(/\s*[、,，;；]\s*/)) addPlain(raw);
     }
+
+    // ② 无括号式：邻邦：名（态度）  邻邦: 甲（友好）、乙（敌对）
+    const rePlain = new RegExp('(?:^|[\\s;；。，,、])(' + KEY + ')\\s*[:：]\\s*([^\\n]+)', 'g');
+    while ((m = rePlain.exec(src)) !== null) {
+      const chunk = String(m[2] || '');
+      const segs = chunk.split(/\s*[、,，;；]\s*/);
+      for (const seg of segs) addPlain(seg);
+    }
+
+    // 一段文本 → 名 + 态度。名字优先取到第一个分隔符为止
+    function addPlain(raw) {
+      const t = String(raw || '').trim();
+      if (!t) return;
+      // 名（态度） 或 名·态度 或 名 态度
+      const mm = t.match(/^(.+?)\s*(?:[|｜:：·•\-—]\s*|\s+|（|\()\s*(.*)$/);
+      if (!mm) { push(t, ''); return; }
+      push(mm[1], mm[2]);
+    }
+
     return out;
   }
 
@@ -4201,7 +4251,6 @@
     if (page !== '外交') return;
     renderDiplomacy(currentDomain());
   }
-
   function renderView(d) {
     if (!viewEl) return;
     // 设置是独立面板，view 整块让位，不往里写

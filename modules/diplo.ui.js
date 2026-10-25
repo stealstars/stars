@@ -37,6 +37,7 @@
     scanErr: '',
     mode: '',           // '' | 'ai'
     neighbour: [],      // 邻邦名列表（由主脚本塞进来）
+    neighbourAsked: false,  // 主脚本是否已经给过邻邦（给空数组也是有给）
   };
 
   var PREF = 'fief-ledger-diplo-v2';
@@ -657,8 +658,19 @@
     }
     var out = '';
 
+    // 邻邦只属于「当前领地」。点了别的势力时，那是世界书里的条目，
+    // 天生没有邻邦数据，硬显示会让人以为是那个势力的邻邦。
+    var ownFaction = S.faction;
     var nb = renderNeighbours();
-    if (nb) out += nb;
+    if (nb) {
+      out += nb;
+    } else if (S.neighbourAsked) {
+      // 已经问过主脚本了，确实没有 → 给出提示，别让这块无声消失
+      // （之前是 return ''，玩家看到的就是「外交页完全没有邻邦」）
+      out += '<div class="fl-dip-h" style="margin-top:4px"><b>邻 邦</b><em>Neighbours</em><s></s></div>'
+        + '<div class="fl-dw-empty">当前领地还没有记邻邦'
+        + '<small>在领地的 <code>[邻邦|势力名|态度]</code> 行里写，或让 AI 输出时带上</small></div>';
+    }
 
     out += '<div class="fl-dip-h"' + (nb ? ' style="margin-top:18px"' : '') + '>'
       + '<b>天 下 势 力</b><em>Powers</em><s></s></div>';
@@ -831,7 +843,12 @@
     bind: bind,
     state: S,
     build: buildProfile,
-    setNeighbours: function (list) { S.neighbour = Array.isArray(list) ? list : []; },
+    setNeighbours: function (list) {
+      S.neighbour = Array.isArray(list) ? list : [];
+      // 标记「主脚本已经给过我邻邦了」。
+      // 给了空数组 = 确实没有邻邦，界面要给出提示而不是整块消失。
+      S.neighbourAsked = true;
+    },
     setOwnTier: function (t) { S.ownTier = String(t || ''); },
     reset: function () { S.faction = ''; S.place = ''; S.expanded = {}; S.profile = null; savePref(); },
     clearCache: function () { try { host.localStorage.removeItem(CACHE); } catch (e) { /* 忽略 */ } },

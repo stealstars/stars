@@ -55,6 +55,28 @@
 
 .fl-dw-card.on::before { opacity: 1; }
 
+/* 有领地但没记邻邦时给个说明，不要让这块无声消失 */
+.fl-dw-empty {
+  border: 1px dashed var(--fl-line2);
+  border-radius: 10px;
+  padding: 14px 14px 13px;
+  font-size: 12.5px;
+  color: var(--fl-dim);
+  line-height: 1.7;
+}
+.fl-dw-empty small {
+  display: block;
+  margin-top: 5px;
+  font-size: 11px;
+  opacity: .8;
+}
+.fl-dw-empty code {
+  font-size: 11px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
 .fl-dw-nm {
   font-size: 13.5px;
   font-weight: 600;
