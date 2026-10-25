@@ -1,13 +1,13 @@
 {
   "name": "fief-ledger",
   "displayName": "领地档案",
-  "version": "0.9.22",
+  "version": "0.9.23",
   "channel": "stable",
   "schemaVersion": 1,
   "loaderMin": "0.1.0",
   "publishedAt": "2026-10-25",
   "moduleCount": 11,
-  "totalBytes": 386066,
+  "totalBytes": 389758,
   "modules": [
     {
       "path": "modules/worldbook.js",
@@ -54,14 +54,14 @@
     {
       "path": "modules/diplo.css.js",
       "desc": "外交页样式",
-      "bytes": 8262,
-      "sha256": "47e39844f583fdad5c1bc2dfe5e097bf20ca8e8346de7a78b090ebfcaaec8548"
+      "bytes": 8727,
+      "sha256": "515a6d477b9a4c4faaf691ec17e467e53afbc466d476a50e7a2a442dc8583825"
     },
     {
       "path": "modules/diplo.ui.js",
       "desc": "外交页逻辑",
-      "bytes": 32324,
-      "sha256": "50d07f2339d819d553ef5104463aa808d2cc1c1c42aa21c5789333f7268c67ec"
+      "bytes": 33361,
+      "sha256": "314f90cc94e6a69c3b24d8461a41a80273942786a3daaa4d952f15dde80f0701"
     },
     {
       "path": "modules/prompts/diplomacy.js",
@@ -72,8 +72,8 @@
     {
       "path": "modules/core.js",
       "desc": "主脚本",
-      "bytes": 223371,
-      "sha256": "8f836f316c9d433596287d3d57d426e9da2a1191bd6f5f6956ad36a27421bf5f"
+      "bytes": 225561,
+      "sha256": "2719572dc08a637c623a7fddf4147013c6f807d498070bfc4d992c49e8994176"
     }
   ]
 }
