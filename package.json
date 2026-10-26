@@ -1,6 +1,6 @@
 {
   "name": "fief-ledger",
-  "version": "0.9.28",
+  "version": "0.9.29",
   "private": true,
   "type": "module",
   "description": "领地档案 —— 酒馆助手脚本，领地/政令/外交的可查册子",
