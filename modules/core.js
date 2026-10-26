@@ -1487,6 +1487,13 @@
         it.firstSeen = fresh.firstSeen;
         it.archived = false;
         it.missing = false;
+        /**
+         * 归档过的条目，即使这一轮又出现在活数据里，也继续藏着。
+         * 归档的语义是「我不想要它」，不是「这一轮先别看」——
+         * 否则玩家收起来的东西下一条消息就自己蹦回来，等于没法用。
+         * 数据照常更新（上面已经写进去了），只是不显示。
+         */
+        if (fresh.hidden) { it.hidden = true; }
       }
       for (const bn of Object.keys(sd.items)) {
         if (live.has(bn)) continue;
@@ -1497,6 +1504,9 @@
         // 仍然展示，只是打上「档案」标记：AI 少写一座，不该让这座建筑凭空消失
         d.items.push(storeItemView(d.name, rec, true, true));
       }
+      // 活数据里被归档的也从这一轮的列表里摘掉
+      // （前面打了 hidden 标记，这里统一过滤，别让界面多一条判断）
+      d.items = d.items.filter((x) => !x.hidden);
     }
 
     return { store, touched, liveNames };
@@ -2116,6 +2126,10 @@
   border: 1px solid var(--fl-line);
   border-radius: 4px;
   padding: 1px 5px;
+}
+.fl-arch-tag.live {
+  color: rgba(212, 175, 90, .9);
+  border-color: rgba(212, 175, 90, .35);
 }
 .fl-arch-act { flex: 0 0 auto; display: flex; gap: 6px; }
 .fl-mini {
@@ -3272,7 +3286,7 @@
             <div class="fl-sec">
               <div class="fl-sec-h">归 档<em>Archive</em><span></span></div>
               <div class="fl-sec-note">
-                归档只是从列表里藏起来，数据还留着，随时能恢复。<br>
+                任何建筑都能收进归档。收起之后列表里不再显示，数据仍然留着，随时能恢复。<br>
                 真删要再点一次确认，删掉之后快照也不再读它。
               </div>
               <div id="fl-arch-list" style="margin-top:12px"></div>
@@ -3671,7 +3685,7 @@
         out += '<div class="fl-arch-row" data-arch-dom="' + esc(dn) + '" data-arch-name="' + esc(it.name) + '">'
           + '<span class="fl-arch-nm">' + esc(it.name) + '</span>'
           + (it.category ? '<span class="fl-arch-tag">' + esc(it.category) + '</span>' : '')
-          + (it.missing ? '<span class="fl-arch-tag">已消失</span>' : '')
+          + (it.missing ? '<span class="fl-arch-tag">已消失</span>' : '<span class="fl-arch-tag live">仍在</span>')
           + '<span class="fl-arch-act">'
           + '<button class="fl-mini" type="button" data-arch-do="unhide">恢复</button>'
           + '<button class="fl-mini' + (pending ? ' danger' : '') + '" type="button" data-arch-do="purge">'
@@ -4259,15 +4273,13 @@
     const key = it.domain + '::' + it.name;
     const hasNote = !!(notes[key] && notes[key].trim());
     const out = it.output || (/\d/.test(it.quant || '') ? it.quant : '');
-    // 只给「已经不在活数据里」的条目显示收起按钮。
-    // 正在用的建筑不该被藏起来，那会让人以为丢了。
-    const canHide = !!(it.missing || it.archived);
+    // 任何条目都能归档。归档 = 「我不想要它」，之后一直藏着（可手动恢复）。
     return `<div class="fl-card" data-cat="${esc(it.category)}" data-k="${esc(key)}">
       <div class="fl-card-t">
         <span class="fl-ic">${iconOf(it.category)}</span>
         <span class="fl-card-n">${esc(it.name)}</span>
         ${hasNote ? '<span class="fl-dot" title="有批注"></span>' : ''}
-        ${canHide ? `<button class="fl-card-x" type="button" title="收进归档" data-hide-dom="${esc(it.domain)}" data-hide-name="${esc(it.name)}">×</button>` : ''}
+        <button class="fl-card-x" type="button" title="收进归档" data-hide-dom="${esc(it.domain)}" data-hide-name="${esc(it.name)}">×</button>
       </div>
       <div class="fl-card-m">
         <span class="fl-pill ${statusClass(it.status)}">${esc(it.status || '未标注')}</span>

@@ -75,14 +75,24 @@ ok('确认态文案是「确定删？」', /确定删？/.test(SRC));
 ok('卡片有收起按钮', /data-hide-dom=/.test(SRC));
 ok('收起不会打开抽屉', /if \(x\) \{[\s\S]{0,80}stopPropagation/.test(SRC));
 
-console.log('\n=== 9. 只给档案条目标题显示收起按钮 ===');
+console.log('\n=== 9. 任何条目都能归档 ===');
 {
   const body = (SRC.match(/function buildingCardHtml[\s\S]*?\n  \}/) || [''])[0];
-  ok('有 canHide 判据', /const canHide = !!\(it\.missing \|\| it\.archived\)/.test(body));
-  ok('用 canHide 控制按钮', /canHide \? `/.test(body));
+  ok('没有 canHide 限制了', !/const canHide/.test(body));
+  ok('按钮无条件渲染', /<button class="fl-card-x"[^>]*data-hide-dom=/.test(body));
+  ok('按钮在标题行里', /fl-card-n[\s\S]{0,120}fl-card-x/.test(body));
 }
 ok('archived 标记在快照来源时设置',
   /if \(!it\.fromStore\) \{ it\.fromSnapshot = true; it\.archived = true; \}/.test(SRC));
+
+console.log('\n=== 9b. 归档过的一直藏着（新数据来了也不回来）===');
+ok('mergeStore 里检查 fresh.hidden', /if \(fresh\.hidden\) \{ it\.hidden = true; \}/.test(SRC));
+ok('活数据也过滤掉', /d\.items = d\.items\.filter\(\(x\) => !x\.hidden\)/.test(SRC));
+{
+  const body = (SRC.match(/function mergeStore[\s\S]*?\n  \}\n/) || [''])[0];
+  ok('数据仍然更新（不是扔了）', /Object\.assign\(rec, snapshotItem\(it\)/.test(body));
+  ok('只是打 hidden 标记', /it\.hidden = true/.test(body));
+}
 
 console.log('\n=== 10. 导出了三个接口 ===');
 ok('导出 hide', /hide: \(domain, name\) => hideItem/.test(SRC));
