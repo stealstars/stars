@@ -2381,25 +2381,26 @@
   .fl-card-t .fl-ic { flex: none; width: 16px; height: 16px; color: var(--fl-cat, var(--fl-accent)); }
   .fl-card-t .fl-ic svg { width: 16px; height: 16px; display: block; }
 
-/* 卡片右上角的收起按钮：只出现在「仅存于档案」的条目上 */
-.fl-card-x {
-  flex: none;
-  margin-left: auto;
-  width: 18px;
-  height: 18px;
-  line-height: 1;
-  font-size: 13px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
+/* 抽屉底部的操作按钮 */
+.fl-dr-act { display: flex; gap: 8px; margin-top: 10px; }
+.fl-dr-act .fl-btn { flex: 1 1 auto; }
+
+/* 归档入口条：有归档才出现 */
+.fl-archbar { margin: 0 0 10px; }
+.fl-arch-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
   color: var(--fl-dimmer);
+  border: 1px solid var(--fl-line);
+  border-radius: 999px;
+  padding: 3px 11px;
   cursor: pointer;
-  opacity: .55;
-  transition: opacity .14s, color .14s, background .14s;
+  transition: color .14s, border-color .14s, background .14s;
 }
-.fl-card:hover .fl-card-x { opacity: 1; }
-.fl-card-x:hover { color: #e08a6a; background: rgba(224, 138, 106, .14); }
+.fl-arch-bar b { color: var(--fl-accent); font-weight: 600; letter-spacing: .04em; }
+.fl-arch-bar:hover { color: var(--fl-ink); border-color: rgba(212, 175, 90, .45); }
   .fl-card-n {
     flex: 1; min-width: 0; font-size: 14px; letter-spacing: .8px; color: var(--fl-bright);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -3127,7 +3128,7 @@
   let selected = null;
   let domIdx = 0;
   let root, star, screen, heroEl, tabsEl, viewEl, drawerEl, scrimEl, footEl, domselEl,
-      badgeEl, toastEl, liveEl, sayEl, navEl, metricsEl, settingsEl, archListEl;
+      badgeEl, toastEl, liveEl, sayEl, navEl, metricsEl, settingsEl, archListEl, archBarEl;
   // buildUI 里赋值：切到设置页时要用它把上一次停留的那一面恢复出来
   let showSetPane = () => {};
 
@@ -3209,6 +3210,7 @@
       <div class="fl-hero" id="fl-hero"></div>
       <div class="fl-metrics" id="fl-metrics"></div>
       <div class="fl-tabs" id="fl-tabs"></div>
+      <div class="fl-archbar" id="fl-archbar"></div>
       <div class="fl-view" id="fl-view"></div>
 
       <section class="fl-settings" id="fl-settings">
@@ -3318,6 +3320,7 @@
     applyAccent(prefs.accent);
 
     heroEl = screen.querySelector('#fl-hero');
+    archBarEl = screen.querySelector('#fl-archbar');
     metricsEl = screen.querySelector('#fl-metrics');
     tabsEl = screen.querySelector('#fl-tabs');
     navEl = screen.querySelector('#fl-nav');
@@ -4142,6 +4145,33 @@
         render();
       });
     });
+    renderArchBar(d);
+  }
+
+  /**
+   * 归档入口条。只有真的收过东西才出现，免得空着占地方。
+   * 这里显示的是当前领地的数量，点一下跳去设置里的归档面板。
+   */
+  function renderArchBar(d) {
+    if (!archBarEl) return;
+    const dn = d ? d.name : '';
+    const mine = dn ? archivedItems(dn) : [];
+    const all = archivedItems('');
+    if (!all.length) { archBarEl.innerHTML = ''; return; }
+    const n = mine.length;
+    const other = all.length - n;
+    archBarEl.innerHTML = '<span class="fl-arch-bar" id="fl-arch-open">'
+      + '<b>归档</b>'
+      + (n ? '本领地 ' + n + ' 项' : '本领地没有')
+      + (other ? '　其它领地 ' + other + ' 项' : '')
+      + '</span>';
+    const open = archBarEl.querySelector('#fl-arch-open');
+    if (open) {
+      open.addEventListener('click', () => {
+        goPage('设置');
+        if (showSetPane) showSetPane('arch');
+      });
+    }
   }
 
   function renderFoot() {
@@ -4273,13 +4303,12 @@
     const key = it.domain + '::' + it.name;
     const hasNote = !!(notes[key] && notes[key].trim());
     const out = it.output || (/\d/.test(it.quant || '') ? it.quant : '');
-    // 任何条目都能归档。归档 = 「我不想要它」，之后一直藏着（可手动恢复）。
+    // 归档入口在详情抽屉里，不在卡片上——列表保持干净，也不会误点
     return `<div class="fl-card" data-cat="${esc(it.category)}" data-k="${esc(key)}">
       <div class="fl-card-t">
         <span class="fl-ic">${iconOf(it.category)}</span>
         <span class="fl-card-n">${esc(it.name)}</span>
         ${hasNote ? '<span class="fl-dot" title="有批注"></span>' : ''}
-        <button class="fl-card-x" type="button" title="收进归档" data-hide-dom="${esc(it.domain)}" data-hide-name="${esc(it.name)}">×</button>
       </div>
       <div class="fl-card-m">
         <span class="fl-pill ${statusClass(it.status)}">${esc(it.status || '未标注')}</span>
@@ -4831,18 +4860,7 @@
 
   function bindView(d) {
     viewEl.querySelectorAll('.fl-card[data-k]').forEach((n) => {
-      n.addEventListener('click', (e) => {
-        // 收起按钮不要打开抽屉
-        const x = e.target.closest('[data-hide-dom]');
-        if (x) {
-          e.stopPropagation();
-          const r = hideItem(x.getAttribute('data-hide-dom'), x.getAttribute('data-hide-name'));
-          toast(r.ok
-            ? ('已收进归档：' + x.getAttribute('data-hide-name') + '（设置 → 归档 可恢复）')
-            : (r.why || '归档失败'));
-          render();
-          return;
-        }
+      n.addEventListener('click', () => {
         const parts = String(n.dataset.k).split('::');
         openDrawer(parts[0], parts[1]);
       });
@@ -4984,10 +5002,27 @@
           <textarea class="fl-note" id="fl-note" placeholder="补一句设定、记一个钩子，只有你看得到…">${esc(hasNote ? notes[key] : '')}</textarea>
           <div class="fl-hint">存在本存档的聊天变量里 · 不进 prompt · 自动保存</div>
         </div>
+        <div class="fl-sec">
+          <div class="fl-sec-h"><span>收 起</span><s></s></div>
+          <div class="fl-hint" style="margin-top:0">收进归档后列表里不再显示。数据留着，设置 → 归档 可以恢复。</div>
+          <div class="fl-dr-act">
+            <button class="fl-btn ghost" type="button" id="fl-dr-hide">收进归档</button>
+          </div>
+        </div>
       </div>`;
 
     const x = drawerEl.querySelector('#fl-dr-x');
     if (x) x.addEventListener('click', closeDrawer);
+    const hideBtn = drawerEl.querySelector('#fl-dr-hide');
+    if (hideBtn) {
+      hideBtn.addEventListener('click', () => {
+        const r = hideItem(it.domain, it.name);
+        if (!r.ok) { toast(r.why || '归档失败'); return; }
+        toast('已收进归档：' + it.name + '（设置 → 归档 可恢复）');
+        closeDrawer();
+        render();
+      });
+    }
     bindNote();
   }
 

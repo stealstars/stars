@@ -72,18 +72,36 @@ ok('showPane 会填充归档', /if \(cur === 'arch'\) fillArchPane\(\)/.test(SRC
 ok('有 fillArchPane', /function fillArchPane/.test(SRC));
 ok('有真删二次确认', /purgePending !== key/.test(SRC));
 ok('确认态文案是「确定删？」', /确定删？/.test(SRC));
-ok('卡片有收起按钮', /data-hide-dom=/.test(SRC));
-ok('收起不会打开抽屉', /if \(x\) \{[\s\S]{0,80}stopPropagation/.test(SRC));
 
-console.log('\n=== 9. 任何条目都能归档 ===');
+console.log('\n=== 9. 归档入口在详情抽屉里，不在卡片上 ===');
 {
-  const body = (SRC.match(/function buildingCardHtml[\s\S]*?\n  \}/) || [''])[0];
-  ok('没有 canHide 限制了', !/const canHide/.test(body));
-  ok('按钮无条件渲染', /<button class="fl-card-x"[^>]*data-hide-dom=/.test(body));
-  ok('按钮在标题行里', /fl-card-n[\s\S]{0,120}fl-card-x/.test(body));
+  const card = (SRC.match(/function buildingCardHtml[\s\S]*?\n  \}\n/) || [''])[0];
+  ok('卡片上没有归档按钮', !/fl-card-x/.test(card));
+  ok('卡片上没有 data-hide-dom', !/data-hide-dom/.test(card));
+  ok('卡片仍然可点开抽屉', /data-k=/.test(card));
+
+  // openDrawer 里有嵌套大括号，按行锚到「\n  }」再取整段
+  const i0 = SRC.indexOf('function openDrawer');
+  const i1 = SRC.indexOf('function bindNote', i0);
+  const dr = i0 >= 0 && i1 > i0 ? SRC.slice(i0, i1) : '';
+  ok('抽到了 openDrawer 整段', dr.length > 2000, String(dr.length));
+  ok('抽屉里有收起按钮', /id="fl-dr-hide"/.test(dr));
+  ok('按钮文案是「收进归档」', /收进归档/.test(dr));
+  ok('点了会调 hideItem', /hideItem\(it\.domain, it\.name\)/.test(dr));
+  ok('归档后关抽屉', /closeDrawer\(\)/.test(dr));
+  ok('归档后重绘', /render\(\)/.test(dr));
 }
-ok('archived 标记在快照来源时设置',
-  /if \(!it\.fromStore\) \{ it\.fromSnapshot = true; it\.archived = true; \}/.test(SRC));
+ok('全局没有残留的 fl-card-x', !/fl-card-x/.test(SRC));
+ok('全局没有残留的 data-hide-dom', !/data-hide-dom/.test(SRC));
+
+console.log('\n=== 9c. 领地页有归档总览入口 ===');
+ok('有归档条容器', /id="fl-archbar"/.test(SRC));
+ok('有 renderArchBar', /function renderArchBar/.test(SRC));
+ok('renderTabs 里调用了', /renderArchBar\(d\)/.test(SRC));
+ok('没有归档时不显示', /if \(!all\.length\) \{ archBarEl\.innerHTML = ''; return; \}/.test(SRC));
+ok('显示本领地数量', /本领地 ' \+ n \+ ' 项/.test(SRC));
+ok('显示其它领地数量', /其它领地 ' \+ other \+ ' 项/.test(SRC));
+ok('点击跳到归档面板', /goPage\('设置'\)[\s\S]{0,60}showSetPane\('arch'\)/.test(SRC));
 
 console.log('\n=== 9b. 归档过的一直藏着（新数据来了也不回来）===');
 ok('mergeStore 里检查 fresh.hidden', /if \(fresh\.hidden\) \{ it\.hidden = true; \}/.test(SRC));
