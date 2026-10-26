@@ -266,7 +266,95 @@
    */
   var SCALE_RE = /(^|[\s|｜,，])(?:规模|地点类别|城市规模|等级规模)\s*[:：]\s*([^\n|｜]{1,24})/m;
 
+  /**
+   * 原文的规模写法五花八门，真正能对上七档的只有一部分。
+   * 拿命定卡统计过：
+   *   对得上     大型城市 / 中型城镇 / 小型村镇 / 村庄 / 超级城市
+   *   归并不了   庞大城邦 / 远古生态区级 / 巨型城市 / 首都级 / 大型港市 / 中型圣所城镇
+   *   根本不是规模  「30人以内」「50人以内」（那是人口）
+   *               「高度: 平均高度240米…」（建筑高度，被 SCALE_RE 误抓）
+   * 外交页以前直接把原文塞进档位标签，所以显示的是一堆非七档的词。
+   */
+  var TIER7 = ['村庄', '小型村镇', '中型城镇', '大型城市', '超级城市', '小国或帝国行省', '大国'];
+
+  /** 原文规模 → 七档。比不中返回空串，绝不原样留着 */
+  var TIER_RULES = [
+    [/^村庄$/, '村庄'],
+    [/^小型村镇$/, '小型村镇'],
+    [/^中型城镇$/, '中型城镇'],
+    [/^大型城市$/, '大型城市'],
+    [/^超级城市$/, '超级城市'],
+    [/^小国或帝国行省$/, '小国或帝国行省'],
+    [/^大国$/, '大国'],
+
+    [/^(村落|小村|村|屯|营地|聚落)$/, '村庄'],
+    [/^(小镇|集镇|乡镇|镇)$/, '小型村镇'],
+
+    // 城邦、首都这类一般顶一个城市甚至更高
+    [/^(庞大城邦|巨型城邦|大城邦|城邦|自由邦)$/, '超级城市'],
+    [/^(巨型城市|超大城市|大都会|都会|巨型港市|大型港市|自由港)$/, '超级城市'],
+    [/^(首都级|王都|帝都|都城|首府)$/, '超级城市'],
+    [/^(远古生态区级|生态区级|巨型生态区)$/, '超级城市'],
+
+    [/^(中型圣所城镇|圣所城镇)$/, '中型城镇'],
+    [/^(大型城市|大城市|城市|大城)$/, '大型城市'],
+    [/^(要塞|军港|关隘|港口|港市)$/, '中型城镇'],
+
+    [/^(行省|帝国行省|小国|公国|伯国|侯国)$/, '小国或帝国行省'],
+    [/^(王国|帝国|联邦|联盟|汗国|大公国)$/, '大国'],
+  ];
+
+  /**
+   * 原文规模 → 七档。
+   * 会剥掉括号补充（「大型城市(港口)」）、取区间里大的那个（「村庄-小型村镇」）。
+   */
+  function cleanTier7(raw) {
+    var t = String(raw || '').trim();
+    if (!t) return '';
+    // 明显不是规模的：人口、高度、距离
+    if (/^\d+\s*(人|口|米|里|丈)/.test(t)) return '';
+    if (/^(高度|面积|长度|宽度|人口|驻军)\s*[:：]/.test(t)) return '';
+    if (/^\d/.test(t) && !/级|档|等/.test(t)) return '';
+
+    var stem = t.replace(/[（(][^）)]*[）)]/g, '').trim();
+    var cands = [t, stem];
+    var inParen = (t.match(/[（(]([^）)]*)[）)]/g) || []).join(' ')
+      .replace(/[（()）]/g, ' ').trim();
+
+    for (var i = 0; i < cands.length; i += 1) {
+      var c = String(cands[i] || '').trim();
+      if (!c) continue;
+      // 区间「村庄-小型村镇」取大的
+      var segs = c.split(/[-—~～至]/).map(function (x) { return x.trim(); }).filter(Boolean);
+      if (segs.length > 1) {
+        var best = '';
+        for (var s = 0; s < segs.length; s += 1) {
+          var one = cleanTier7(segs[s]);
+          if (one && TIER7.indexOf(one) > TIER7.indexOf(best || '村庄')) best = one;
+        }
+        if (best) return best;
+      }
+      for (var r = 0; r < TIER_RULES.length; r += 1) {
+        if (TIER_RULES[r][0].test(c)) return TIER_RULES[r][1];
+      }
+    }
+    if (inParen) {
+      for (var r2 = 0; r2 < TIER_RULES.length; r2 += 1) {
+        if (TIER_RULES[r2][0].test(inParen)) return TIER_RULES[r2][1];
+      }
+    }
+    return '';
+  }
+
   function placeScale(content) {
+    var m = String(content || '').match(SCALE_RE);
+    if (!m) return '';
+    // 归并进七档；归并不了就留空，宁可没有也别显示「远古生态区级」
+    return cleanTier7(m[2]);
+  }
+
+  /** 原文那句规模写了什么（想知道为什么归并不了就看这个） */
+  function placeScaleRaw(content) {
     var m = String(content || '').match(SCALE_RE);
     return m ? m[2].trim() : '';
   }
@@ -420,6 +508,9 @@
     listNames: listNames,
     normalize: normalize,
     placeScale: placeScale,
+    placeScaleRaw: placeScaleRaw,
+    cleanTier7: cleanTier7,
+    TIER7: TIER7,
     pickField: pickField,
     /** 诊断：把能查到的东西全列出来，扫不到时照着这个看断在哪 */
     debug: function () {
