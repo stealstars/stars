@@ -155,6 +155,41 @@
   opacity: .92;
 }
 
+/* 原文只列了名字、没有独立条目的城市 —— 看得见，但点不了 */
+.fl-dp-ghost {
+  cursor: default;
+  opacity: .72;
+}
+
+.fl-dp-ghost:hover {
+  background: transparent;
+  border-color: transparent;
+}
+
+.fl-dp-ghost .fl-dp-nm {
+  font-style: italic;
+}
+
+/* 公国：中层的政治实体，本身不是一个能点开的地点 */
+.fl-dp-duchy {
+  cursor: default;
+  margin-top: 6px;
+  border-top: 1px solid rgba(212, 175, 90, .16);
+  padding-top: 9px;
+}
+
+.fl-dp-duchy:hover {
+  background: transparent;
+  border-color: transparent;
+  border-top-color: rgba(212, 175, 90, .16);
+}
+
+.fl-dp-duchy .fl-dp-nm {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .3px;
+}
+
 .fl-dp-nm {
   font-size: 13px;
   color: var(--fl-ink);

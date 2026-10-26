@@ -296,14 +296,81 @@
    * 地点列表。
    *
    * 世界书的条目名是有层级的：
-   *   [兽族联盟][风信子城][皇城区]枢机厅
-   * 风信子城 → 皇城区 → 枢机厅 是三级。以前全平铺，一屏几十个平级条目，
-   * 看不出谁属于谁。现在按 parent 排成树，子项缩进。
+   *   [兽族联盟][鼠族王国][风信子城][皇城区]枢机厅
+   * 鼠族王国 → 风信子城 → 皇城区 → 枢机厅 是四级。
+   *
+   * 但各势力的数据形态差别很大：
+   *   有层级的  [兽族联盟][鼠族王国][风信子城][主城区][圣录城区]海棠学院
+   *   扁平的    [奥古斯提姆帝国]艾瑟嘉德            ← 只有一条，没有子城区
+   *   只声明    「主要城市: 巡天王庭(首都)，龙渊京…」← 根本没有条目
+   *
+   * 所以列表要同时显示三种东西：
+   *   实体节点（有条目）+ 虚拟分组（只在「主要城市」里出现过）+ 缺失标记
    */
+  /**
+   * 公国层：有些势力的中层是政治实体，不是城市。
+   *
+   *   [诺斯加德联盟]埃吉尔海德公国
+   *     首府: 凛风渡
+   *     核心领土: 雾凇海岸全境
+   *     飞地辖区: …含霜镜港与白港
+   *
+   * 归成：
+   *   埃吉尔海德公国（首府 凛风渡）
+   *   ├ 凛风渡            ← 首府，有自己条目就有下级
+   *   ├ 雾凇海岸          ← 核心领土，region 标记
+   *   └ 霜镜港 · 白港     ← 飞地
+   * 没有任何归属的城市，单独列在后面，不硬塞。
+   */
+  function duchyTree(f) {
+    var duchies = f.duchies || [];
+    if (!duchies.length) return null;
+
+    var claimed = {};   // 名字 → 公国名
+    for (var i = 0; i < duchies.length; i += 1) {
+      var d = duchies[i];
+      if (d.capital) claimed[d.capital] = d.name;
+      if (d.core) claimed[d.core] = d.name;
+      for (var e = 0; e < (d.enclaves || []).length; e += 1) claimed[d.enclaves[e]] = d.name;
+    }
+
+    var byDuchy = {};
+    var loose = [];
+    for (var j = 0; j < f.places.length; j += 1) {
+      var p = f.places[j];
+      var owner = claimed[p.name];
+      if (!owner) { loose.push(p); continue; }
+      if (!byDuchy[owner]) byDuchy[owner] = [];
+      byDuchy[owner].push(p);
+    }
+
+    return {
+      duchies: duchies.map(function (d) {
+        return { info: d, places: byDuchy[d.name] || [] };
+      }),
+      loose: loose,
+    };
+  }
+
   function placeTree(f) {
     var byName = {};
     var i;
     for (i = 0; i < f.places.length; i += 1) byName[f.places[i].name] = f.places[i];
+
+    // 虚拟分组：原文「主要城市」里写了、但没有独立条目的
+    var groups = f.groups || [];
+    var ghost = {};
+    for (i = 0; i < groups.length; i += 1) {
+      var g = groups[i];
+      if (g.kind === 'declared' || g.kind === 'inferred') {
+        // 有子项但没有实体条目 → 造一个虚拟节点
+        if (!byName[g.name]) ghost[g.name] = { name: g.name, ghost: true, scale: '', where: '', count: g.count };
+      } else if (g.kind === 'declared-empty') {
+        // 声明了但一条条目都没有 → 也要能看见
+        if (!byName[g.name]) ghost[g.name] = { name: g.name, ghost: true, empty: true, scale: '', where: '', count: 0 };
+      }
+    }
+
     var kids = {};
     var roots = [];
     for (i = 0; i < f.places.length; i += 1) {
@@ -312,12 +379,52 @@
       if (p.parent && p.parent !== p.name && byName[p.parent]) {
         if (!kids[p.parent]) kids[p.parent] = [];
         kids[p.parent].push(p);
+      } else if (p.parent && p.parent !== p.name && ghost[p.parent]) {
+        // 父级是虚拟分组
+        if (!kids[p.parent]) kids[p.parent] = [];
+        kids[p.parent].push(p);
       } else {
         roots.push(p);
       }
     }
+    // 虚拟分组自己作为根节点
+    for (var gn in ghost) {
+      if (!ghost.hasOwnProperty(gn)) continue;
+      roots.push(ghost[gn]);
+    }
+
+    /**
+     * 有公国结构的势力（诺斯加德联盟），顶层换成公国：
+     *   埃吉尔海德公国
+     *   ├ 凛风渡 → 港口区、下城区…
+     *   ├ 雾凇海岸
+     *   └ 霜镜港、白港
+     * 已经挂到公国下的城市，不再作为顶层单独出现。
+     */
+    var dt = duchyTree(f);
+    var duchyNodes = [];
+    if (dt) {
+      var inDuchy = {};
+      for (var di = 0; di < dt.duchies.length; di += 1) {
+        var grp = dt.duchies[di];
+        for (var dp = 0; dp < grp.places.length; dp += 1) inDuchy[grp.places[dp].name] = true;
+        duchyNodes.push({
+          node: { name: grp.info.name, duchyNode: true, info: grp.info, places: grp.places },
+          kids: grp.places,
+        });
+      }
+      // 公国里的城市从顶层摘掉
+      var kept = [];
+      for (i = 0; i < roots.length; i += 1) {
+        if (!inDuchy[roots[i].name]) kept.push(roots[i]);
+      }
+      roots = kept;
+    }
+
     // 展平成一串 {node, depth}
     var flat = [];
+    // 只防「公国名和同名地点各出现一次」。不同城市下的「下城区」是同名不同地，必须都留。
+    var duchyNames = {};
     var walk = function (node, depth, guard) {
       if (guard > 12) return;   // 数据成环时别把页面拖死
       flat.push({ node: node, depth: depth });
@@ -325,7 +432,19 @@
       if (!cs || !cs.length) return;
       for (var k = 0; k < cs.length; k += 1) walk(cs[k], depth + 1, guard + 1);
     };
-    for (i = 0; i < roots.length; i += 1) walk(roots[i], 0, 0);
+
+    // 公国排在最前，各自展开自己的城市
+    for (var dn2 = 0; dn2 < duchyNodes.length; dn2 += 1) {
+      var dnode = duchyNodes[dn2];
+      duchyNames[dnode.node.name] = true;
+      flat.push({ node: dnode.node, depth: 0 });
+      for (var dk = 0; dk < dnode.kids.length; dk += 1) walk(dnode.kids[dk], 1, 1);
+    }
+    for (i = 0; i < roots.length; i += 1) {
+      // 顶层如果跟某个公国同名（「联盟直辖区」既是公国又是地点条目），跳过这一个
+      if (duchyNames[roots[i].name]) { duchyNames[roots[i].name] = false; continue; }
+      walk(roots[i], 0, 0);
+    }
     // 万一有条目在环里没被走到，补在最后，免得整条消失
     if (flat.length < f.places.length) {
       var seen = {};
@@ -352,12 +471,42 @@
     for (var i = 0; i < show; i += 1) {
       var p = flat[i].node;
       var depth = flat[i].depth;
-      var on = p.name === S.place ? ' on' : '';
-      var hit = cacheGet(f.name, p.name);
+      var on = (!p.ghost && p.name === S.place) ? ' on' : '';
+      var hit = !p.ghost && cacheGet(f.name, p.name);
       var pad = depth > 0 ? ' style="padding-left:' + (10 + depth * 13) + 'px"' : '';
+      var br = depth > 0 ? '<span class="fl-dp-br">└</span>' : '';
+
+      // 公国：显示名字 + 首府 + 核心领土，本身点不了
+      if (p.duchyNode) {
+        var info = p.info || {};
+        out += '<div class="fl-dp-row fl-dp-duchy" title="'
+          + esc('首府 ' + (info.capital || '?') + '　核心领土 ' + (info.core || '?')
+            + ((info.enclaves || []).length ? '　飞地 ' + info.enclaves.join('、') : ''))
+          + '">'
+          + '<span class="fl-dp-nm">' + esc(p.name) + '</span>'
+          + (info.capital ? '<span class="fl-dp-tag">首府 ' + esc(info.capital) + '</span>' : '')
+          + '</div>';
+        continue;
+      }
+
+      // 原文没有这条条目，只是「主要城市」里写了名字
+      if (p.ghost) {
+        var tip = p.empty
+          ? '原文只列了名字，没有单独条目，点不了'
+          : '原文没有单独条目，子项直接挂在势力下';
+        out += '<div class="fl-dp-row fl-dp-ghost"' + pad + ' title="' + tip + '">'
+          + br
+          + '<span class="fl-dp-nm">' + esc(p.name) + '</span>'
+          + (p.count ? '<span class="fl-dp-tag" style="opacity:.55">' + p.count + ' 处</span>' : '')
+          + '<span class="fl-dp-tag" style="opacity:.45">原文无条目</span>'
+          + '</div>';
+        continue;
+      }
+
       out += '<div class="fl-dp-row' + on + (depth > 0 ? ' fl-dp-sub' : '') + '" data-dw-place="' + esc(p.name) + '"' + pad + '>'
-        + (depth > 0 ? '<span class="fl-dp-br">└</span>' : '')
+        + br
         + '<span class="fl-dp-nm">' + esc(p.name) + '</span>'
+        + (p.region ? '<span class="fl-dp-tag" style="opacity:.7">疆域</span>' : '')
         + (p.scale ? '<span class="fl-dp-tag">' + esc(p.scale) + '</span>' : '')
         + (hit ? '<span class="fl-dp-tag" style="opacity:.6">已建档</span>' : '')
         + (p.where ? '<span class="fl-dp-wh">' + esc(p.where) + '</span>' : '')

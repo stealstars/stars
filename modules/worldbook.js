@@ -473,6 +473,167 @@
       if (node.isPlace) factions[sp.faction].places.push(node);
       else factions[sp.faction].overview.push(node);
     }
+
+    /**
+     * 补一层「大城市/大区」分组。
+     *
+     * 玩家："十个国家点进去直接就是城市了，没有大国啊"
+     *
+     * 世界书的结构是 [势力][大城市][城区]具体地点：
+     *   [索伦蒂斯王国][潮汐王座]天穹之冠
+     *   [兽族联盟][风信子城][皇城区]枢机厅
+     * 「潮汐王座」自己**没有条目**，只是个前缀——所以它不是 places 里的节点，
+     * 子项全变成了孤儿、看起来直接挂在国家下面。
+     *
+     * 这里用两级原文信息把这一层补出来：
+     *   ① 「主要城市: 潮汐王座(首都)，珍珠湾，风暴堡…」  ← 势力总述里的字段
+     *   ② 条目名里的方括号前缀                          ← 子项自己带的信息
+     * 两条对得上的，建一个 group 节点。不编名字，只用原文出现过的。
+     */
+    var FAC_KEYS = Object.keys(factions);
+    for (var fi = 0; fi < FAC_KEYS.length; fi += 1) {
+      var fname = FAC_KEYS[fi];
+      var fac = factions[fname];
+
+      // ① 从势力总述里抽「主要城市 / 核心领土」
+      var declared = [];
+      var ovs = fac.overview;
+      for (var oi = 0; oi < ovs.length; oi += 1) {
+        var oc = String(ovs[oi].content || '');
+        var mcRe = /(?:^|[\s|｜])(?:主要城市|核心城市|下辖城市|城市列表)\s*[:：]\s*([^\n]{1,300})/m;
+        var mm = oc.match(mcRe);
+        if (mm) {
+          // 「潮汐王座(首都)，珍珠湾(博彩与红灯区之都)」→ 取括号前的名字
+          var parts = mm[1].split(/[，,、;；]/);
+          for (var pi = 0; pi < parts.length; pi += 1) {
+            var nm0 = parts[pi].replace(/[（(][^）)]*[）)]/g, '').trim();
+            if (nm0 && declared.indexOf(nm0) < 0) declared.push(nm0);
+          }
+        }
+        var ctRe = /(?:^|[\s|｜])核心领土\s*[:：]\s*([^\n]{1,120})/m;
+        var cm = oc.match(ctRe);
+        if (cm) {
+          var rg0 = cm[1].replace(/全境|范围|区域|地区|不含.*$/g, '')
+            .replace(/[，,、;；。.\s]+$/g, '').trim();
+          if (rg0 && declared.indexOf(rg0) < 0) declared.push(rg0);
+        }
+      }
+
+      // ② 数每个名字下面挂了多少条
+      //    两种都要算：
+      //      a) 父级是 places 里的节点（「风信子城」自己有条目）→ 那条就是子项
+      //      b) 父级不在 places 里（「潮汐王座」没条目）→ 需要建虚拟层
+      var used = {};
+      var pls = fac.places;
+      var nameSet = {};
+      for (var pk = 0; pk < pls.length; pk += 1) nameSet[pls[pk].name] = pls[pk];
+
+      // a) 自己就是节点的：它下面挂的也算它的
+      for (var pa = 0; pa < pls.length; pa += 1) {
+        var paNode = pls[pa];
+        if (!paNode.parent) continue;
+        used[paNode.parent] = (used[paNode.parent] || 0) + 1;
+      }
+      // b) 已经在上面的循环里统一算了（父级不存在的也在 used 里）
+      //    区分「要不要建虚拟层」看父级在不在 nameSet
+
+      // ③ 只收「原文声明过」或「至少 2 个子项」的，避免一个子项就立个组
+      var groups = [];
+      var usedKeys = Object.keys(used);
+      for (var ui = 0; ui < usedKeys.length; ui += 1) {
+        var un = usedKeys[ui];
+        var isDeclared = declared.indexOf(un) >= 0;
+        if (!isDeclared && used[un] < 2) continue;
+        if (TYPE_TAG.test(un)) continue;
+        groups.push({
+          name: un,
+          // 有实体条目 → 正常节点；没有 → 虚拟层
+          kind: nameSet[un] ? 'node' : (isDeclared ? 'declared' : 'inferred'),
+          count: used[un],
+        });
+      }
+      // 声明了、但「一条子项都没有」的，标出来
+      // 注意：有自己条目但没子项的（石蒜城），那是正常叶子节点，不是空声明
+      for (var di = 0; di < declared.length; di += 1) {
+        var dn = declared[di];
+        if (used[dn]) continue;
+        if (TYPE_TAG.test(dn) || dn === fname) continue;
+        if (nameSet[dn]) {
+          // 有条目、只是没有下级 → 正常叶子，不列进 groups（它已经在 places 里）
+          continue;
+        }
+        groups.push({ name: dn, kind: 'declared-empty', count: 0 });
+      }
+      fac.groups = groups;
+      fac.declared = declared;
+
+      /**
+       * 公国层：有些势力的中层是「政治实体」而不是城市。
+       *
+       *   [诺斯加德联盟]埃吉尔海德公国
+       *     首府: 凛风渡
+       *     领土: 核心领土: 雾凇海岸全境
+       *           飞地辖区: 风切半岛西部沿海，含霜镜港与白港
+       *
+       * 这一层原文写得很清楚（首府 + 核心领土 + 飞地），照抄就行：
+       *   公国 → 首府（城市）+ 核心领土（大区）+ 飞地（含哪些城）
+       * 关系：
+       *   埃吉尔海德公国  首府 凛风渡   核心领土 雾凇海岸   飞地含 霜镜港、白港
+       */
+      var duchies = [];
+      var ovAll = fac.overview.concat(fac.places);
+      for (var qi = 0; qi < ovAll.length; qi += 1) {
+        var q = ovAll[qi];
+        var qc = String(q.content || '');
+        var capM = qc.match(/(?:^|[\s|｜])首府\s*[:：]\s*([^\n|｜，,]{1,30})/m);
+        if (!capM) continue;
+        var coreM = qc.match(/(?:^|[\s|｜])核心领土\s*[:：]\s*([^\n|｜]{1,60})/m);
+        var enclM = qc.match(/(?:^|[\s|｜])(?:飞地辖区|飞地|控制区|边境防区)\s*[:：]\s*([^\n|｜]{1,80})/m);
+
+        var cap = capM[1].trim();
+        // 「雾凇海岸全境」「风切半岛全境，不含霜镜港与白港」→ 只取地名
+        var core = coreM ? coreM[1]
+          .replace(/全境|范围$/g, '')
+          .replace(/[，,]\s*不含.*$/g, '')
+          .replace(/[，,、;；。.\s]+$/g, '').trim() : '';
+        // 飞地里提到的已有地名（「含霜镜港与白港」）
+        var encl = [];
+        if (enclM) {
+          for (var ei = 0; ei < fac.places.length; ei += 1) {
+            var pn = fac.places[ei].name;
+            if (pn && enclM[1].indexOf(pn) >= 0 && encl.indexOf(pn) < 0) encl.push(pn);
+          }
+        }
+        duchies.push({
+          name: q.name,
+          capital: cap,
+          core: core,
+          enclaves: encl,
+          overview: q.content,
+        });
+      }
+      fac.duchies = duchies;
+
+      /**
+       * 把「大区」型地点（有独立条目、名字出现在某公国的核心领土里）标成 region，
+       * 让界面能把它跟普通城镇区分开。
+       *   雾凇海岸  有条目（1290 字），是埃吉尔海德公国的核心领土 → region
+       */
+      for (var ri = 0; ri < fac.places.length; ri += 1) {
+        var rp = fac.places[ri];
+        for (var dj = 0; dj < duchies.length; dj += 1) {
+          if (duchies[dj].core && rp.name === duchies[dj].core) {
+            rp.region = true;
+            rp.duchy = duchies[dj].name;
+          }
+          if (duchies[dj].capital && rp.name === duchies[dj].capital) {
+            rp.capital = true;
+            rp.duchy = duchies[dj].name;
+          }
+        }
+      }
+    }
+
     return factions;
   }
 
