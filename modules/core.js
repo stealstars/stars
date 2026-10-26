@@ -1218,6 +1218,134 @@
   let storeSavedSig = '';
   let muteHooks = false;   // 写档案库时不触发自己的检测通道
 
+  /* ------------------------------------------------- 归档 / 删除
+   *
+   * 玩家要能把「只在档案里活着的旧设施、旧决议」清掉，但删了历史就断。
+   * 所以分两级：
+   *
+   *   归档（hidden=true）
+   *     列表里不显示，数据全留着，快照照常读。
+   *     随时可以恢复。
+   *
+   *   真删（从 sd.items 抹掉）
+   *     只能对已归档的条目做，等于第二道确认。
+   *     数据没了，之后快照也不再读它：
+   *       ① 从快照的营造里删掉同名建筑
+   *       ② 记进 deletedNames，getBestStat 时跳过，
+   *          防止「下一条消息的变量又把它带回来」
+   */
+  const DELETED_KEY = 'fief_deleted';   // 聊天变量里存被真删的名字
+
+  /** 读「已被真删的名字」清单，用于挡住回流 */
+  function loadDeletedNames(domain) {
+    const vars = readChatVars();
+    const all = (vars && vars[DELETED_KEY]) || {};
+    const list = Array.isArray(all[domain]) ? all[domain] : [];
+    return new Set(list.map(String));
+  }
+
+  function saveDeletedNames(domain, set) {
+    const vars = readChatVars();
+    const all = Object.assign({}, (vars && vars[DELETED_KEY]) || {});
+    if (set && set.size) all[domain] = Array.from(set);
+    else delete all[domain];
+    muteHooks = true;
+    try { writeChatVars({ [DELETED_KEY]: all }); } catch (e) { /* 忽略 */ }
+    finally { muteHooks = false; }
+  }
+
+  /** 归档：只打标记，什么都不删 */
+  function hideItem(domain, name) {
+    const store = loadStore();
+    const sd = store.domains[domain];
+    if (!sd || !sd.items[name]) return { ok: false, why: '档案库里没有这一条' };
+    if (sd.items[name].hidden) return { ok: true, already: true };
+    sd.items[name].hidden = true;
+    sd.items[name].hiddenAt = Date.now();
+    saveStore(store, true);
+    return { ok: true };
+  }
+
+  /** 恢复：撤掉归档标记 */
+  function unhideItem(domain, name) {
+    const store = loadStore();
+    const sd = store.domains[domain];
+    if (!sd || !sd.items[name]) return { ok: false, why: '档案库里没有这一条' };
+    delete sd.items[name].hidden;
+    delete sd.items[name].hiddenAt;
+    saveStore(store, true);
+    return { ok: true };
+  }
+
+  /**
+   * 真删。只能删已归档的（第二道确认）。
+   * 会同时清理快照里的同名建筑，并把名字记进 deletedNames 防止回流。
+   */
+  function purgeItem(domain, name) {
+    const store = loadStore();
+    const sd = store.domains[domain];
+    if (!sd || !sd.items[name]) return { ok: false, why: '档案库里没有这一条' };
+    if (!sd.items[name].hidden) return { ok: false, why: '先归档才能删' };
+
+    delete sd.items[name];
+    saveStore(store, true);
+
+    // ① 快照里也删掉
+    const removed = purgeFromSnapshot(domain, name);
+    // ② 记住这个名字，挡住下一条消息把它带回来
+    const set = loadDeletedNames(domain);
+    set.add(name);
+    saveDeletedNames(domain, set);
+
+    return { ok: true, snapshotRemoved: removed };
+  }
+
+  /**
+   * 从快照的 stat 里删掉某个建筑。
+   * 快照结构：stat['领地'][领地名]['内部资产'] 下有一串具名节点。
+   * 找不到就返回 0，不算失败。
+   */
+  function purgeFromSnapshot(domain, name) {
+    const snap = loadSnapshot();
+    if (!snap || !snap.stat) return 0;
+    let n = 0;
+    const walk = (node, depth) => {
+      if (!node || typeof node !== 'object' || depth > 6) return;
+      if (Object.prototype.hasOwnProperty.call(node, name)) { delete node[name]; n += 1; }
+      for (const k of Object.keys(node)) {
+        if (node[k] && typeof node[k] === 'object') walk(node[k], depth + 1);
+      }
+    };
+    const dom = snap.stat['领地'] && snap.stat['领地'][domain];
+    if (dom) walk(dom, 0);
+    if (n) {
+      snap.modifiedAt = new Date().toISOString();
+      snapCache = snap;
+      muteHooks = true;
+      try { writeChatVars({ [SNAP_KEY]: snap }); }
+      catch (e) { try { host.localStorage.setItem(SNAP_LS + currentChatId(), JSON.stringify(snap)); } catch (e2) { /* 忽略 */ } }
+      finally { muteHooks = false; }
+    }
+    return n;
+  }
+
+  /** 列出某个领地的归档条目（界面上要看得到、能恢复） */
+  function archivedItems(domain) {
+    const store = loadStore();
+    const sd = domain ? store.domains[domain] : null;
+    const out = [];
+    const doms = sd ? { [domain]: sd } : store.domains;
+    for (const dn of Object.keys(doms)) {
+      const d = doms[dn];
+      for (const bn of Object.keys(d.items)) {
+        const it = d.items[bn];
+        if (!it.hidden) continue;
+        out.push({ domain: dn, name: bn, at: it.hiddenAt || 0, missing: !!it.missing, category: it.category || '' });
+      }
+    }
+    return out;
+  }
+
   function loadStore() {
     const cid = currentChatId();
     if (storeCache && storeCache.chatId === cid) return storeCache;
@@ -1328,7 +1456,10 @@
       if (JSON.stringify(meta) !== JSON.stringify(sd.meta)) { sd.meta = meta; touched = true; }
 
       const live = new Set();
+      // 被真删掉的名字：就算这一条消息的变量里又出现了，也不再建档
+      const gone = loadDeletedNames(d.name);
       for (const it of d.items) {
+        if (gone.has(it.name)) { it.hidden = true; continue; }
         live.add(it.name);
         const fp = itemFp(it);
         const rec = sd.items[it.name];
@@ -1360,6 +1491,8 @@
       for (const bn of Object.keys(sd.items)) {
         if (live.has(bn)) continue;
         const rec = sd.items[bn];
+        // 归档的不再出现在常规列表里（要看、要恢复，去「归档」面板）
+        if (rec.hidden) continue;
         if (!rec.missing) { rec.missing = true; rec.missingAt = msgIdx; touched = true; }
         // 仍然展示，只是打上「档案」标记：AI 少写一座，不该让这座建筑凭空消失
         d.items.push(storeItemView(d.name, rec, true, true));
@@ -1369,13 +1502,15 @@
     return { store, touched, liveNames };
   }
 
-  /** 变量整批丢了也能把领地读出来：从档案库复原 */
+  /** 变量整批丢了也能把领地读出来：从档案库复原（归档过的不要恢复回来） */
   function restoreFromStore(store, liveNames, blocks) {
     const out = [];
     for (const dn of Object.keys(store.domains)) {
       if (liveNames.has(dn)) continue;
       const sd = store.domains[dn];
-      const items = Object.keys(sd.items).map((bn) => storeItemView(dn, sd.items[bn], true));
+      const items = Object.keys(sd.items)
+        .filter((bn) => !sd.items[bn].hidden)
+        .map((bn) => storeItemView(dn, sd.items[bn], true));
       out.push({ name: dn, items, info: blocks[dn] || null, meta: sd.meta || {}, fromStore: true });
     }
     return out;
@@ -1955,6 +2090,52 @@
   .fl-sec-h span { flex: 1; height: 1px; background: var(--fl-line); }
   .fl-sec-note { font-size: 11px; line-height: 1.75; color: var(--fl-dimmer); margin-top: 9px; }
 
+/* 归档面板 */
+.fl-arch-dom {
+  font-size: 11px;
+  letter-spacing: .08em;
+  color: var(--fl-dimmer);
+  margin: 14px 0 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--fl-line);
+}
+.fl-arch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  font-size: 12.5px;
+}
+.fl-arch-row:hover { background: rgba(212, 175, 90, .05); }
+.fl-arch-nm { flex: 1 1 auto; color: var(--fl-ink); }
+.fl-arch-tag {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--fl-dimmer);
+  border: 1px solid var(--fl-line);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.fl-arch-act { flex: 0 0 auto; display: flex; gap: 6px; }
+.fl-mini {
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 5px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--fl-dim);
+  border: 1px solid var(--fl-line);
+  transition: color .14s, border-color .14s, background .14s;
+}
+.fl-mini:hover { color: var(--fl-ink); border-color: rgba(212, 175, 90, .45); }
+.fl-mini.danger {
+  color: #e08a6a;
+  border-color: rgba(224, 138, 106, .5);
+  background: rgba(224, 138, 106, .1);
+}
+
   /* ---- 读取日志：等宽小字，手机上靠长按选取 / 复制按钮 ---- */
   .fl-logbar { display: flex; gap: 8px; margin-bottom: 8px; }
   .fl-logbar .fl-btn { padding: 4px 11px; font-size: 11px; letter-spacing: .8px; }
@@ -2185,6 +2366,26 @@
   .fl-card-t { display: flex; align-items: center; gap: 8px; }
   .fl-card-t .fl-ic { flex: none; width: 16px; height: 16px; color: var(--fl-cat, var(--fl-accent)); }
   .fl-card-t .fl-ic svg { width: 16px; height: 16px; display: block; }
+
+/* 卡片右上角的收起按钮：只出现在「仅存于档案」的条目上 */
+.fl-card-x {
+  flex: none;
+  margin-left: auto;
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  font-size: 13px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fl-dimmer);
+  cursor: pointer;
+  opacity: .55;
+  transition: opacity .14s, color .14s, background .14s;
+}
+.fl-card:hover .fl-card-x { opacity: 1; }
+.fl-card-x:hover { color: #e08a6a; background: rgba(224, 138, 106, .14); }
   .fl-card-n {
     flex: 1; min-width: 0; font-size: 14px; letter-spacing: .8px; color: var(--fl-bright);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -2912,7 +3113,7 @@
   let selected = null;
   let domIdx = 0;
   let root, star, screen, heroEl, tabsEl, viewEl, drawerEl, scrimEl, footEl, domselEl,
-      badgeEl, toastEl, liveEl, sayEl, navEl, metricsEl, settingsEl;
+      badgeEl, toastEl, liveEl, sayEl, navEl, metricsEl, settingsEl, archListEl;
   // buildUI 里赋值：切到设置页时要用它把上一次停留的那一面恢复出来
   let showSetPane = () => {};
 
@@ -3003,6 +3204,7 @@
             <span class="fl-set-tab" data-pane="read">读取</span>
             <span class="fl-set-tab on" data-pane="look">外观</span>
             <span class="fl-set-tab" data-pane="api">API</span>
+            <span class="fl-set-tab" data-pane="arch">归档</span>
             <span class="fl-set-tab" data-pane="about">关于</span>
           </div>
         </div>
@@ -3066,6 +3268,17 @@
             </div>
           </div>
 
+          <div class="fl-pane" id="fl-pane-arch">
+            <div class="fl-sec">
+              <div class="fl-sec-h">归 档<em>Archive</em><span></span></div>
+              <div class="fl-sec-note">
+                归档只是从列表里藏起来，数据还留着，随时能恢复。<br>
+                真删要再点一次确认，删掉之后快照也不再读它。
+              </div>
+              <div id="fl-arch-list" style="margin-top:12px"></div>
+            </div>
+          </div>
+
           <div class="fl-pane" id="fl-pane-about">
             <div class="fl-sec">
               <div class="fl-sec-h">版 本<em>About</em><span></span></div>
@@ -3095,6 +3308,7 @@
     tabsEl = screen.querySelector('#fl-tabs');
     navEl = screen.querySelector('#fl-nav');
     settingsEl = screen.querySelector('#fl-settings');
+    archListEl = screen.querySelector('#fl-arch-list');
     viewEl = screen.querySelector('#fl-view');
     drawerEl = screen.querySelector('#fl-drawer');
     scrimEl = screen.querySelector('#fl-scrim');
@@ -3108,6 +3322,7 @@
     root.appendChild(toastEl);
 
     bindStarDrag();
+    bindArchPane();
 
     /* ---------------------------------------------------- 工作台（齿轮） */
     const setPanel = screen.querySelector('#fl-settings');
@@ -3121,6 +3336,7 @@
       screen.querySelectorAll('.fl-pane').forEach((p) => p.classList.toggle('on', p.id === 'fl-pane-' + cur));
       if (cur === 'read') fillReadPane();
       if (cur === 'api') fillApiPane();
+      if (cur === 'arch') fillArchPane();
       if (cur === 'about') fillAboutPane();
     };
     // 设置是导航里的一页，不再有开关；外部只通过 goPage('设置') 切过来
@@ -3426,6 +3642,84 @@
     try {
       mod.render(mount);
     } catch (e) { reportError('AI 面板渲染', e); }
+  }
+
+  /* -------------------------------------------------- 归档面板 */
+  // 真删要点两次：第一次进「确认」状态，第二次才真的删
+  let purgePending = null;   // '领地名\u0000条目名'
+
+  function fillArchPane() {
+    if (!screen || !archListEl) return;
+    const list = archivedItems('');
+    if (!list.length) {
+      archListEl.innerHTML = '<div class="fl-sec-note">还没有归档过任何东西。<br>'
+        + '在领地里把不想要的旧设施收起来时，会出现在这里。</div>';
+      return;
+    }
+    // 按领地分组
+    const byDom = {};
+    for (const it of list) {
+      if (!byDom[it.domain]) byDom[it.domain] = [];
+      byDom[it.domain].push(it);
+    }
+    let out = '';
+    for (const dn of Object.keys(byDom)) {
+      out += '<div class="fl-arch-dom">' + esc(dn) + '</div>';
+      for (const it of byDom[dn]) {
+        const key = dn + '\u0000' + it.name;
+        const pending = purgePending === key;
+        out += '<div class="fl-arch-row" data-arch-dom="' + esc(dn) + '" data-arch-name="' + esc(it.name) + '">'
+          + '<span class="fl-arch-nm">' + esc(it.name) + '</span>'
+          + (it.category ? '<span class="fl-arch-tag">' + esc(it.category) + '</span>' : '')
+          + (it.missing ? '<span class="fl-arch-tag">已消失</span>' : '')
+          + '<span class="fl-arch-act">'
+          + '<button class="fl-mini" type="button" data-arch-do="unhide">恢复</button>'
+          + '<button class="fl-mini' + (pending ? ' danger' : '') + '" type="button" data-arch-do="purge">'
+          + (pending ? '确定删？' : '真删') + '</button>'
+          + '</span>'
+          + '</div>';
+      }
+    }
+    archListEl.innerHTML = out;
+  }
+
+  function bindArchPane() {
+    if (!archListEl) return;
+    archListEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-arch-do]');
+      if (!btn) return;
+      const row = btn.closest('[data-arch-dom]');
+      if (!row) return;
+      const dn = row.getAttribute('data-arch-dom');
+      const nm = row.getAttribute('data-arch-name');
+      const act = btn.getAttribute('data-arch-do');
+      const key = dn + '\u0000' + nm;
+
+      if (act === 'unhide') {
+        const r = unhideItem(dn, nm);
+        toast(r.ok ? ('已恢复「' + nm + '」') : (r.why || '恢复失败'));
+        purgePending = null;
+        fillArchPane();
+        render();
+        return;
+      }
+      if (act === 'purge') {
+        if (purgePending !== key) {
+          purgePending = key;
+          fillArchPane();
+          return;
+        }
+        const r = purgeItem(dn, nm);
+        purgePending = null;
+        if (!r.ok) toast(r.why || '删除失败');
+        else {
+          toast('已删除「' + nm + '」'
+            + (r.snapshotRemoved ? '，快照里也清掉了 ' + r.snapshotRemoved + ' 处' : ''));
+        }
+        fillArchPane();
+        render();
+      }
+    });
   }
 
   function onKey(e) {
@@ -3965,11 +4259,15 @@
     const key = it.domain + '::' + it.name;
     const hasNote = !!(notes[key] && notes[key].trim());
     const out = it.output || (/\d/.test(it.quant || '') ? it.quant : '');
+    // 只给「已经不在活数据里」的条目显示收起按钮。
+    // 正在用的建筑不该被藏起来，那会让人以为丢了。
+    const canHide = !!(it.missing || it.archived);
     return `<div class="fl-card" data-cat="${esc(it.category)}" data-k="${esc(key)}">
       <div class="fl-card-t">
         <span class="fl-ic">${iconOf(it.category)}</span>
         <span class="fl-card-n">${esc(it.name)}</span>
         ${hasNote ? '<span class="fl-dot" title="有批注"></span>' : ''}
+        ${canHide ? `<button class="fl-card-x" type="button" title="收进归档" data-hide-dom="${esc(it.domain)}" data-hide-name="${esc(it.name)}">×</button>` : ''}
       </div>
       <div class="fl-card-m">
         <span class="fl-pill ${statusClass(it.status)}">${esc(it.status || '未标注')}</span>
@@ -4521,7 +4819,18 @@
 
   function bindView(d) {
     viewEl.querySelectorAll('.fl-card[data-k]').forEach((n) => {
-      n.addEventListener('click', () => {
+      n.addEventListener('click', (e) => {
+        // 收起按钮不要打开抽屉
+        const x = e.target.closest('[data-hide-dom]');
+        if (x) {
+          e.stopPropagation();
+          const r = hideItem(x.getAttribute('data-hide-dom'), x.getAttribute('data-hide-name'));
+          toast(r.ok
+            ? ('已收进归档：' + x.getAttribute('data-hide-name') + '（设置 → 归档 可恢复）')
+            : (r.why || '归档失败'));
+          render();
+          return;
+        }
         const parts = String(n.dataset.k).split('::');
         openDrawer(parts[0], parts[1]);
       });
@@ -5011,6 +5320,11 @@
       metrics: () => (screen ? screen.querySelector('#fl-metrics').innerHTML : ''),
       drawerHtml: () => (drawerEl ? drawerEl.innerHTML : ''),
       filter: (f) => { catFilter = f; render(); },
+      /* 归档 / 删除 */
+      archived: (domain) => archivedItems(domain),
+      hide: (domain, name) => hideItem(domain, name),
+      unhide: (domain, name) => unhideItem(domain, name),
+      purge: (domain, name) => purgeItem(domain, name),
     },
     _pure: {
       parseTags, tagsText, effectText, normalizeInner, extractPatchArrays, pointerSegs,
