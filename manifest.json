@@ -1,13 +1,13 @@
 {
   "name": "fief-ledger",
   "displayName": "领地档案",
-  "version": "0.9.40",
+  "version": "0.9.41",
   "channel": "stable",
   "schemaVersion": 1,
   "loaderMin": "0.1.0",
   "publishedAt": "2026-10-27",
   "moduleCount": 13,
-  "totalBytes": 488849,
+  "totalBytes": 493476,
   "modules": [
     {
       "path": "modules/worldbook.js",
@@ -78,14 +78,14 @@
     {
       "path": "modules/gov.js",
       "desc": "政体",
-      "bytes": 8650,
-      "sha256": "4d32b0544cf64347967664f28a153e79260da55423c9f7a7f1014ea3f17a53a3"
+      "bytes": 13188,
+      "sha256": "d570e8f38c3a9ec6e3e53f0f79e61ff452915bfe8ada47b3bc5a56e2d3c461b7"
     },
     {
       "path": "modules/core.js",
       "desc": "主脚本",
-      "bytes": 253066,
-      "sha256": "6739c231f007e80eba06aae846fed4644732860b65358e6b49c8fbc297be916d"
+      "bytes": 253155,
+      "sha256": "593f6e584cea0fcccbe7875c88095f87411a7e6949cc0941e8999e70b44ac8ea"
     }
   ]
 }
