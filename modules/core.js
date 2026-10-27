@@ -2489,14 +2489,27 @@
   padding: 7px 11px;
   border-radius: 7px;
   border: 1px solid var(--fl-line);
-  background: rgba(0, 0, 0, .18);
-  color: var(--fl-ink);
+  /* 不透明深色底：半透明黑叠在浅色父层上会变白，字就看不见了 */
+  background: #14110b;
+  color: var(--fl-text);
+  -webkit-text-fill-color: var(--fl-text);
+  caret-color: var(--fl-text);
+  outline: none;
 }
-.fl-gov-in:focus { outline: none; border-color: rgba(212, 175, 90, .45); }
-.fl-gov-in::placeholder { color: var(--fl-dimmer); }
+.fl-gov-in:focus { border-color: rgba(212, 175, 90, .45); }
+.fl-gov-in::placeholder { color: rgba(var(--fl-text-rgb), 0.28); }
+/* 浏览器自动填充会把底色刷成白/黄，盖回来 */
+.fl-gov-in:-webkit-autofill,
+.fl-gov-in:-webkit-autofill:hover,
+.fl-gov-in:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--fl-text);
+  -webkit-box-shadow: 0 0 0 1000px #14110b inset;
+  transition: background-color 9999s ease-out;
+}
 .fl-gov-note { font-size: 11px; color: var(--fl-dimmer); margin-top: 7px; line-height: 1.65; }
 .fl-gov-note b { color: var(--fl-dim); font-weight: 400; }
 .fl-gov-note.err { color: #e08a7a; }
+#fl-gov-make[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
   .fl-card-n {
     flex: 1; min-width: 0; font-size: 14px; letter-spacing: .8px; color: var(--fl-bright);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -4972,7 +4985,8 @@
       + '<div class="fl-gov-ai-r">'
       + '<input class="fl-gov-in" id="fl-gov-idea" type="text" maxlength="60" '
       + 'placeholder="描述你想要的政体，比如「让贵族别那么横」" value="' + esc(govIdea) + '">'
-      + '<button class="fl-btn ghost" type="button" id="fl-gov-make"' + (ai ? '' : ' disabled') + '>'
+      + '<button class="fl-btn ghost" type="button" id="fl-gov-make"'
+      + (ai ? '' : ' aria-disabled="true"') + '>'
       + '' + (govBusy ? '拟定中…' : '让 AI 拟') + '</button>'
       + '</div>'
       + (ai ? '<div class="fl-gov-note">留空也行，AI 会按这块地的实际条件给一套。</div>'
@@ -5023,6 +5037,9 @@
     const mod = window.__fiefGov;
     const ai = window.__fiefAI;
     if (!mod || !ai || govBusy) return;
+    // 以输入框当前值为准，别用可能没同步的缓存
+    const el = viewEl && viewEl.querySelector('#fl-gov-idea');
+    if (el) govIdea = el.value;
     const d = currentDomain();
     govBusy = true; govErr = '';
     render();

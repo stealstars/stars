@@ -166,6 +166,32 @@ ok('AI 政策可点选', /data-made=/.test(UI_SRC));
 ok('AI 政策可删除', /data-drop=/.test(UI_SRC));
 ok('回车能提交想法', /e\.key === 'Enter'/.test(UI_SRC));
 
+console.log('\n=== 9b. 按钮不许静默失效 ===');
+{
+  // 之前用 disabled，点了毫无反馈，玩家以为坏了
+  ok('自创不用 disabled', !/id="fl-create"'\s*\+\s*\(canCreate \? '' : ' disabled'\)/.test(UI_SRC));
+  ok('自创用 aria-disabled', /\(canCreate \? '' : ' aria-disabled="true"'"\)/.test(UI_SRC)
+    || /canCreate \? '' : ' aria-disabled="true"/.test(UI_SRC));
+  ok('合成用 aria-disabled', /canSynth \? '' : ' aria-disabled="true"/.test(UI_SRC));
+  ok('点自创没写想法会提示', /先在左边写一句想法/.test(UI_SRC));
+  ok('点合成不够两条会提示', /要合成，先选两条以上/.test(UI_SRC));
+  ok('没配 API 点按钮也提示', /AI 没配好/.test(UI_SRC));
+  ok('输入时同步按钮状态', /syncBtns/.test(UI_SRC));
+  ok('同步用 aria-disabled', /cr2\.removeAttribute\('aria-disabled'\)/.test(UI_SRC));
+}
+
+console.log('\n=== 9c. 输入框不许白底白字 ===');
+{
+  ok('自创框不透明底', /background: #14110b/.test(CSS_SRC));
+  ok('自创框用 text-rgb', /color: rgb\(var\(--fl-text-rgb\)\)/.test(CSS_SRC));
+  ok('自创框有 fill-color', /-webkit-text-fill-color/.test(CSS_SRC));
+  ok('自创框有 caret-color', /caret-color/.test(CSS_SRC));
+  ok('挡住自动填充白底', /-webkit-autofill/.test(CSS_SRC));
+  ok('placeholder 用低透明度文字色', /\.fl-pai-in::placeholder \{ color: rgba\(var\(--fl-text-rgb\)/.test(CSS_SRC));
+  ok('不再用半透明黑底', !/\.fl-pai-in \{[\s\S]{0,300}background: rgba\(0,0,0,\.18\)/.test(CSS_SRC));
+  ok('aria-disabled 有样式', /\.fl-pai-btn\[aria-disabled="true"\]/.test(CSS_SRC));
+}
+
 console.log('\n=== 10. AI 调用 ===');
 ok('调用 __fiefAI', /window\.__fiefAI/.test(UI_SRC));
 ok('合成传 system', /system: pr\.systemSynth/.test(UI_SRC));

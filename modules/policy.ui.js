@@ -301,23 +301,28 @@
     const ai = AI();
     const ready = !!(pr && ai);
     const picked = chosenBuiltin();
+    // 允许「一个字也行，按回车就提交」，但至少要有内容
     const canSynth = ready && picked.length >= 2 && !aiBusy;
-    const canCreate = ready && ideaText.trim().length >= 2 && !aiBusy;
+    const canCreate = ready && ideaText.trim().length >= 1 && !aiBusy;
 
     let out = '<div class="fl-pai">';
     // 合成
     out += '<div class="fl-pai-r">'
-      + '<button class="fl-btn ghost fl-pai-btn" id="fl-synth"' + (canSynth ? '' : ' disabled') + '>'
+      + '<button class="fl-btn ghost fl-pai-btn" id="fl-synth"'
+      + (canSynth ? '' : ' aria-disabled="true"') + '>'
       + '合成已选 <b>' + picked.length + '</b></button>'
       + '<span class="fl-pai-hint">'
       + (picked.length < 2 ? '选两条以上才能合成' : '把这几条并成一条上位政策')
       + '</span></div>';
 
     // 自创
+    // 不用 disabled：禁用的按钮点了毫无反馈，玩家会以为页面坏了。
+    // 换成 aria-disabled + 点击时说明原因。
     out += '<div class="fl-pai-r fl-pai-idea">'
       + '<input class="fl-pai-in" id="fl-idea" type="text" maxlength="60" '
       + 'placeholder="一句话想法，比如「让商队愿意常驻」" value="' + escFn(ideaText) + '">'
-      + '<button class="fl-btn ghost fl-pai-btn" id="fl-create"' + (canCreate ? '' : ' disabled') + '>自创</button>'
+      + '<button class="fl-btn ghost fl-pai-btn" id="fl-create"'
+      + (canCreate ? '' : ' aria-disabled="true"') + '>自创</button>'
       + '</div>';
 
     if (!ready) {
@@ -410,9 +415,13 @@
   /** 自创：一句话 → 一条政令 */
   function runCreate(rootEl) {
     const pr = PR(), ai = AI();
-    if (!pr || !ai) return;
-    const idea = ideaText.trim();
-    if (idea.length < 2) { toastFn('先写一句想法'); return; }
+    if (!pr || !ai) { aiErr = 'AI 模块或提示词没加载'; repaint(rootEl, false, true); return; }
+    // 以输入框当前值为准：缓存可能因为没重绘而对不上
+    const el = rootEl ? rootEl.querySelector('#fl-idea') : null;
+    if (el) ideaText = el.value;
+    const idea = String(ideaText || '').trim();
+    if (!idea) { toastFn('先写一句想法'); return; }
+    if (aiBusy) return;
 
     aiBusy = true; aiErr = ''; aiMode = 'create'; lastResult = null;
     repaint(rootEl, false, true);
@@ -551,20 +560,60 @@
 
     /* ---- AI：合成 / 自创 ---- */
     const sy = q('#fl-synth');
-    if (sy) sy.addEventListener('click', () => runSynth(rootEl));
+    if (sy) sy.addEventListener('click', () => {
+      if (!PR() || !AI()) { aiErr = 'AI 没配好，先去 设置 → API'; repaint(rootEl, false, true); return; }
+      const n = chosenBuiltin().length;
+      if (n < 2) {
+        aiErr = '要合成，先选两条以上（现在选了 ' + n + ' 条）';
+        repaint(rootEl, false, true);
+        return;
+      }
+      aiErr = '';
+      runSynth(rootEl);
+    });
 
     const idea = q('#fl-idea');
     if (idea) {
-      // 输入时只记状态，不重绘，否则会丢焦点
-      idea.addEventListener('input', () => { ideaText = idea.value; });
+      // 输入时只记状态、顺手开关按钮，不整块重绘（重绘会丢焦点，输入到一半就断了）
+      const syncBtns = () => {
+        const okIdea = ideaText.trim().length >= 1;
+        const hasAI = !!(PR() && AI());
+        const cr2 = q('#fl-create');
+        if (cr2) {
+          if (okIdea && hasAI && !aiBusy) cr2.removeAttribute('aria-disabled');
+          else cr2.setAttribute('aria-disabled', 'true');
+        }
+        const sy2 = q('#fl-synth');
+        if (sy2) {
+          if (chosenBuiltin().length >= 2 && hasAI && !aiBusy) sy2.removeAttribute('aria-disabled');
+          else sy2.setAttribute('aria-disabled', 'true');
+        }
+      };
+      idea.addEventListener('input', () => { ideaText = idea.value; syncBtns(); });
       idea.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); runCreate(rootEl); }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          // 回车时以输入框的实际值为准，别用可能没同步的缓存
+          ideaText = idea.value;
+          runCreate(rootEl);
+        }
       });
+      syncBtns();
     }
     const cr = q('#fl-create');
     if (cr) cr.addEventListener('click', () => {
       const el = q('#fl-idea');
       if (el) ideaText = el.value;
+      // 点了一定给反馈，让玩家知道缺什么
+      if (!PR() || !AI()) { aiErr = 'AI 没配好，先去 设置 → API'; repaint(rootEl, false, true); return; }
+      if (!String(ideaText || '').trim()) {
+        aiErr = '先在左边写一句想法';
+        repaint(rootEl, false, true);
+        const back = q('#fl-idea');
+        if (back) { try { back.focus(); } catch (e) { /* 忽略 */ } }
+        return;
+      }
+      aiErr = '';
       runCreate(rootEl);
     });
 

@@ -276,6 +276,11 @@
   .fl-pai-r { display: flex; align-items: center; gap: 9px; }
   .fl-pai-btn { flex: none; padding: 5px 13px; font-size: 12px; }
   .fl-pai-btn b { color: var(--fl-accent); font-weight: 600; }
+  /* 不用 disabled：点了要有反馈，所以只做视觉上的「现在不该点」 */
+  .fl-pai-btn[aria-disabled="true"] {
+    opacity: .45;
+    cursor: not-allowed;
+  }
   .fl-pai-hint { font-size: 11px; color: var(--fl-dim); }
   .fl-pai-idea { gap: 8px; }
   .fl-pai-in {
@@ -286,11 +291,22 @@
     padding: 6px 10px;
     border-radius: 7px;
     border: 1px solid var(--fl-line);
-    background: rgba(0,0,0,.18);
-    color: var(--fl-ink);
+    /* 不透明深色底：半透明叠在浅色父层上会变白，字就看不见 */
+    background: #14110b;
+    color: rgb(var(--fl-text-rgb));
+    -webkit-text-fill-color: rgb(var(--fl-text-rgb));
+    caret-color: rgb(var(--fl-text-rgb));
+    outline: none;
   }
-  .fl-pai-in:focus { outline: none; border-color: rgba(212,175,90,.45); }
-  .fl-pai-in::placeholder { color: var(--fl-dimmer); }
+  .fl-pai-in:focus { border-color: rgba(212,175,90,.45); }
+  .fl-pai-in::placeholder { color: rgba(var(--fl-text-rgb),.28); }
+  .fl-pai-in:-webkit-autofill,
+  .fl-pai-in:-webkit-autofill:hover,
+  .fl-pai-in:-webkit-autofill:focus {
+    -webkit-text-fill-color: rgb(var(--fl-text-rgb));
+    -webkit-box-shadow: 0 0 0 1000px #14110b inset;
+    transition: background-color 9999s ease-out;
+  }
   .fl-pai-note { font-size: 11px; color: var(--fl-dimmer); line-height: 1.65; }
   .fl-pai-note b { color: var(--fl-dim); font-weight: 400; }
   .fl-pai-note.err { color: #e08a7a; }

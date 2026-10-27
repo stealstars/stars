@@ -143,7 +143,7 @@ console.log('\n=== 8. AI 定制 ===');
   ok('有输入框', /id="fl-gov-idea"/.test(CORE));
   ok('有生成按钮', /id="fl-gov-make"/.test(CORE));
   ok('回车能提交', /e\.key === 'Enter'[\s\S]{0,40}buildGov/.test(CORE));
-  ok('没接口时禁用', /\(ai \? '' : ' disabled'\)/.test(CORE));
+  ok('没接口时标 aria-disabled', /\(ai \? '' : ' aria-disabled="true"'\)/.test(CORE));
   ok('没接口时给提示', /设置 → API/.test(CORE));
   ok('调 __fiefAI', /window\.__fiefAI/.test(CORE));
   ok('传 system', /system: mod\.SYSTEM/.test(CORE));
@@ -165,6 +165,24 @@ console.log('\n=== 10. 构建与上传 ===');
 ok('build 含 gov.js', /modules\/gov\.js/.test(BUILD));
 ok('gov 排在 core 前', BUILD.indexOf('modules/gov.js') < BUILD.indexOf("'modules/core.js'"));
 ok('upload 含 gov.js', /modules\/gov\.js/.test(UPLOAD));
+
+console.log('\n=== 11. 输入框不许白底白字 ===');
+{
+  const css = CORE;
+  ok('政体框不透明底', /\.fl-gov-in \{[\s\S]{0,400}background: #14110b/.test(css));
+  ok('政体框用 fl-text', /\.fl-gov-in \{[\s\S]{0,400}color: var\(--fl-text\)/.test(css));
+  ok('政体框有 fill-color', /\.fl-gov-in \{[\s\S]{0,400}-webkit-text-fill-color/.test(css));
+  ok('政体框有 caret-color', /\.fl-gov-in \{[\s\S]{0,400}caret-color/.test(css));
+  ok('挡住自动填充', /\.fl-gov-in:-webkit-autofill/.test(css));
+  ok('不再用半透明黑底', !/\.fl-gov-in \{[\s\S]{0,300}background: rgba\(0, 0, 0, \.18\)/.test(css));
+  ok('aria-disabled 有样式', /#fl-gov-make\[aria-disabled="true"\]/.test(css));
+}
+
+console.log('\n=== 12. 按钮不许静默失效 ===');
+{
+  ok('政体按钮不用 disabled', /\(ai \? '' : ' aria-disabled="true"'\)/.test(CORE));
+  ok('buildGov 以输入框为准', /const el = viewEl && viewEl\.querySelector\('#fl-gov-idea'\)/.test(CORE));
+}
 
 console.log('\n' + (fail ? fail + ' 项失败' : '全部通过 ✔') + '  ' + pass + ' 项');
 process.exit(fail ? 1 : 0);
