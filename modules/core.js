@@ -4849,6 +4849,19 @@
       });
       policyMounted = true;
     }
+    // 每次渲染都刷一遍领地上下文：合成/自创要知道是哪块地、多大规模
+    if (typeof mod.setContext === 'function') {
+      const d = currentDomain();
+      try {
+        mod.setContext({
+          domain: d ? d.name : '',
+          faction: (d && d.meta && d.meta.势力) || '',
+          scale: (d && d.规模档) || (d && d.info && d.info.规模) || '',
+          pop: (d && d.info && d.info.人口) || '',
+          treasury: (d && d.info && d.info.金库) || '',
+        });
+      } catch (e) { /* 忽略 */ }
+    }
     mod.render(viewEl);
     bindPolicyChrome();
   }

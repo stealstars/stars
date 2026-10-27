@@ -262,9 +262,80 @@
   }
   .fl-chosen:hover i { opacity: 1; color: #e08a7a; }
 
+  /* ---- AI：合成 / 自创 ---- */
+  .fl-pai {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 0 12px;
+    padding: 11px 13px;
+    border: 1px solid rgba(212,175,90,.16);
+    border-radius: 9px;
+    background: rgba(212,175,90,.035);
+  }
+  .fl-pai-r { display: flex; align-items: center; gap: 9px; }
+  .fl-pai-btn { flex: none; padding: 5px 13px; font-size: 12px; }
+  .fl-pai-btn b { color: var(--fl-accent); font-weight: 600; }
+  .fl-pai-hint { font-size: 11px; color: var(--fl-dim); }
+  .fl-pai-idea { gap: 8px; }
+  .fl-pai-in {
+    flex: 1 1 auto;
+    min-width: 0;
+    font: inherit;
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--fl-line);
+    background: rgba(0,0,0,.18);
+    color: var(--fl-ink);
+  }
+  .fl-pai-in:focus { outline: none; border-color: rgba(212,175,90,.45); }
+  .fl-pai-in::placeholder { color: var(--fl-dimmer); }
+  .fl-pai-note { font-size: 11px; color: var(--fl-dimmer); line-height: 1.65; }
+  .fl-pai-note b { color: var(--fl-dim); font-weight: 400; }
+  .fl-pai-note.err { color: #e08a7a; }
+  .fl-pai-note.warn { color: #d8b06a; }
+  .fl-pai-note.busy { display: flex; align-items: center; gap: 7px; color: var(--fl-dim); }
+  @keyframes fl-pai-blink { 0%,100% { opacity: .25 } 50% { opacity: 1 } }
+  .fl-pai-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--fl-accent);
+    animation: fl-pai-blink 1s ease-in-out infinite;
+  }
+
+  .fl-pai-made { display: flex; flex-wrap: wrap; gap: 7px; }
+  .fl-made {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 4px 9px;
+    border-radius: 7px;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--fl-ink);
+    border: 1px solid var(--fl-pc, var(--fl-accent));
+    background: rgba(0,0,0,.16);
+    transition: background .14s;
+  }
+  .fl-made:hover { background: rgba(212,175,90,.1); }
+  .fl-made.on { background: rgba(212,175,90,.18); }
+  .fl-made u { font-style: normal; text-decoration: none; font-size: 10px; color: var(--fl-dim); }
+  .fl-made s { text-decoration: none; font-size: 9px; letter-spacing: .06em; color: var(--fl-dimmer); }
+  .fl-made i {
+    font-style: normal;
+    font-size: 10px;
+    color: var(--fl-dimmer);
+    opacity: .5;
+    transition: opacity .14s, color .14s;
+  }
+  .fl-made:hover i { opacity: 1; }
+  .fl-made i:hover { color: #e08a7a; }
+
+  /* AI 造出来的卡：右上角标记换成「合 / 创」 */
+  .fl-pc.ai .fl-pc-id { color: var(--fl-accent); letter-spacing: 0; }
+
   /* ---- 关系提示 ---- */
-  .fl-rel { display: flex; align-items: flex-start; gap: 10px; }
-  .fl-rel b {
+  .fl-rel { display: flex; align-items: flex-start; gap: 10px; }  .fl-rel b {
     flex: none; padding: 1px 7px; border-radius: 3px;
     font-weight: 400; letter-spacing: 2px; font-size: 10px;
   }
