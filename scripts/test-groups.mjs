@@ -86,13 +86,21 @@ for (const k of Object.keys(tree)) {
 
 console.log('\n=== 7. 用真实 worldbook 数据渲染整棵树 ===');
 {
-  // 把 diplo.ui 里 placeTree 的逻辑单独跑一遍（它不依赖 DOM，但要连带 duchyTree）
+  // 把 diplo.ui 里 placeTree 的逻辑单独跑一遍（它不依赖 DOM，但要连带 duchyTree / provinceTree）
   const src = fs.readFileSync(path.join(ROOT, 'modules/diplo.ui.js'), 'utf8');
-  const m1 = src.match(/function duchyTree[\s\S]*?\n  \}\n/);
-  const m2 = src.match(/function placeTree[\s\S]*?\n  \}\n/);
-  ok('能抽出 placeTree', !!m2);
-  if (m1 && m2) {
-    const fn = new Function('esc', m1[0] + m2[0] + '; return placeTree;')(
+  // 按「下一个 function」切段，避免嵌套大括号把正则截断
+  const cut = (name) => {
+    const i0 = src.indexOf('function ' + name);
+    if (i0 < 0) return '';
+    const i1 = src.indexOf('\n  function ', i0 + 10);
+    return src.slice(i0, i1 > i0 ? i1 : undefined);
+  };
+  const body = cut('provinceTree') + cut('duchyTree') + cut('placeTree');
+  ok('三个阶段函数都抽到了', cut('provinceTree').length > 100
+    && cut('duchyTree').length > 100 && cut('placeTree').length > 100,
+  [cut('provinceTree').length, cut('duchyTree').length, cut('placeTree').length].join('/'));
+  if (body) {
+    const fn = new Function('esc', body + '; return placeTree;')(
       (s) => String(s == null ? '' : s));
     const f = tree['兽族联盟'];
     const flat = fn(f);
@@ -228,6 +236,74 @@ console.log('\n=== 11. 卡片渲染出体量 ===');
   ok('有公国的写公国', /if \(sz\.duchies\) big = sz\.duchies \+ ' 公国'/.test(src));
   ok('没公国的写城', /else if \(sz\.cities\) big = sz\.cities \+ ' 城'/.test(src));
   ok('详情标题也带体量', /meta\.push\(sz2\.duchies \+ ' 公国'\)/.test(src));
+}
+
+console.log('\n=== 12. 行省层：帝国的中层 ===');
+{
+  const ps = tree['奥古斯提姆帝国'].provinces || [];
+  console.log('  奥古斯提姆帝国 ' + ps.length + ' 个省:');
+  for (const x of ps) {
+    console.log('    ' + x.name + ' | 省会 ' + x.capital + ' | ' + x.cities.join('、'));
+  }
+  ok('解析出 7 个省', ps.length === 7, String(ps.length));
+
+  const byName = {};
+  for (const x of ps) byName[x.name] = x;
+  const CASES = [
+    ['艾瑟尼亚省', '艾瑟嘉德', ['艾瑟嘉德', '白石镇']],
+    ['维里迪斯省', '金谷城', ['金谷城']],
+    ['红丘省', '暮林城', ['暮林城', '风车镇']],
+    ['索莱尔省', '翠庭城', ['翠庭城', '渡鸦港']],
+    ['驰原省', '铁炉堡', ['铁炉堡', '红叶镇']],
+  ];
+  for (const [pn, cap, cities] of CASES) {
+    const x = byName[pn];
+    ok(pn + ' 存在', !!x, '没有');
+    ok(pn + ' 省会是' + cap, x && x.capital === cap, x ? x.capital : '');
+    for (const c of cities) {
+      ok(pn + ' 含 ' + c, x && x.cities.indexOf(c) >= 0, x ? x.cities.join('/') : '');
+    }
+  }
+  // 省名要带「省」字
+  ok('省名保留了后缀', ps.every((x) => /省$/.test(x.name)), ps.map((x) => x.name).join('/'));
+
+  // 城市被标上了省
+  const tagged = tree['奥古斯提姆帝国'].places.filter((p) => p.province);
+  console.log('  归到省的地点 ' + tagged.length + ' 个');
+  ok('至少 15 个地点归到省', tagged.length >= 15, String(tagged.length));
+  ok('艾瑟嘉德归到艾瑟尼亚省',
+    (tagged.find((p) => p.name === '艾瑟嘉德') || {}).province === '艾瑟尼亚省',
+    JSON.stringify((tagged.find((p) => p.name === '艾瑟嘉德') || {}).province));
+
+  // 没有区域分布的势力不该凭空多出省
+  ok('兽族联盟没有省', !(tree['兽族联盟'].provinces || []).length);
+  ok('诺斯加德没有省', !(tree['诺斯加德联盟'].provinces || []).length);
+}
+
+console.log('\n=== 13. 帝国渲染成三层 ===');
+{
+  const src = fs.readFileSync(path.join(ROOT, 'modules/diplo.ui.js'), 'utf8');
+  const cut = (name) => {
+    const i0 = src.indexOf('function ' + name);
+    if (i0 < 0) return '';
+    const i1 = src.indexOf('\n  function ', i0 + 10);
+    return src.slice(i0, i1 > i0 ? i1 : undefined);
+  };
+  const body = cut('provinceTree') + cut('duchyTree') + cut('placeTree');
+  const fn = new Function('esc', body + '; return placeTree;')((s) => String(s == null ? '' : s));
+  const flat = fn(tree['奥古斯提姆帝国']);
+  console.log('  21 地点 → ' + flat.length + ' 行，前 24 行:');
+  for (const r of flat.slice(0, 24)) {
+    const tag = r.node.provNode ? '【省】' : r.node.duchyNode ? '【公国】' : '';
+    console.log('    ' + '  '.repeat(r.depth) + (r.depth ? '└ ' : '') + r.node.name + ' ' + tag);
+  }
+  const provRows = flat.filter((r) => r.node.provNode);
+  ok('顶层有省节点', provRows.length === 7, String(provRows.length));
+  ok('省在 depth 0', provRows.every((r) => r.depth === 0), '有不是 0 的');
+  ok('城市在省内', flat.some((r) => r.depth === 1));
+  ok('城区在城下', flat.some((r) => r.depth === 2));
+  // 省级节点本身不该是可点地点
+  ok('省节点没有 province 标记', provRows.every((r) => !r.node.province));
 }
 
 console.log('\n' + (fail ? fail + ' 项失败' : '全部通过 ✔') + '  ' + pass + ' 项');

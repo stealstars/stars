@@ -332,6 +332,48 @@
    *   └ 霜镜港 · 白港     ← 飞地
    * 没有任何归属的城市，单独列在后面，不硬塞。
    */
+  /**
+   * 行省层：帝国的中层。
+   *
+   *   [奥古斯提姆帝国]地理
+   *     区域分布:
+   *       艾瑟尼亚省:
+   *         艾瑟嘉德(首都): ……
+   *         特色城镇: 白石镇
+   *
+   * 归成：
+   *   艾瑟尼亚省（省会 艾瑟嘉德）
+   *   ├ 艾瑟嘉德
+   *   └ 白石镇
+   * 没有归到省的城市单独列在后面，不硬塞。
+   */
+  function provinceTree(f) {
+    var ps = f.provinces || [];
+    if (!ps.length) return null;
+
+    var claimed = {};
+    for (var i = 0; i < ps.length; i += 1) {
+      for (var j = 0; j < ps[i].cities.length; j += 1) claimed[ps[i].cities[j]] = ps[i].name;
+    }
+
+    var byProv = {};
+    var loose = [];
+    for (var k = 0; k < f.places.length; k += 1) {
+      var p = f.places[k];
+      var owner = claimed[p.name];
+      if (!owner) { loose.push(p); continue; }
+      if (!byProv[owner]) byProv[owner] = [];
+      byProv[owner].push(p);
+    }
+
+    return {
+      provinces: ps.map(function (x) {
+        return { info: x, places: byProv[x.name] || [] };
+      }),
+      loose: loose,
+    };
+  }
+
   function duchyTree(f) {
     var duchies = f.duchies || [];
     if (!duchies.length) return null;
@@ -431,6 +473,26 @@
       roots = kept;
     }
 
+    // 行省层：帝国这类没有公国、但有「区域分布」的势力
+    var pt = duchyNodes.length ? null : provinceTree(f);
+    var provNodes = [];
+    if (pt) {
+      var inProv = {};
+      for (var pv = 0; pv < pt.provinces.length; pv += 1) {
+        var pg = pt.provinces[pv];
+        for (var pq = 0; pq < pg.places.length; pq += 1) inProv[pg.places[pq].name] = true;
+        provNodes.push({
+          node: { name: pg.info.name, provNode: true, info: pg.info, places: pg.places },
+          kids: pg.places,
+        });
+      }
+      var kept2 = [];
+      for (i = 0; i < roots.length; i += 1) {
+        if (!inProv[roots[i].name]) kept2.push(roots[i]);
+      }
+      roots = kept2;
+    }
+
     // 展平成一串 {node, depth}
     var flat = [];
     // 只防「公国名和同名地点各出现一次」。不同城市下的「下城区」是同名不同地，必须都留。
@@ -449,6 +511,13 @@
       duchyNames[dnode.node.name] = true;
       flat.push({ node: dnode.node, depth: 0 });
       for (var dk = 0; dk < dnode.kids.length; dk += 1) walk(dnode.kids[dk], 1, 1);
+    }
+    // 行省同理
+    for (var pn = 0; pn < provNodes.length; pn += 1) {
+      var pnode = provNodes[pn];
+      duchyNames[pnode.node.name] = true;
+      flat.push({ node: pnode.node, depth: 0 });
+      for (var qk = 0; qk < pnode.kids.length; qk += 1) walk(pnode.kids[qk], 1, 1);
     }
     for (i = 0; i < roots.length; i += 1) {
       // 顶层如果跟某个公国同名（「联盟直辖区」既是公国又是地点条目），跳过这一个
@@ -495,6 +564,19 @@
           + '">'
           + '<span class="fl-dp-nm">' + esc(p.name) + '</span>'
           + (info.capital ? '<span class="fl-dp-tag">首府 ' + esc(info.capital) + '</span>' : '')
+          + '</div>';
+        continue;
+      }
+
+      // 行省：显示名字 + 省会 + 城数
+      if (p.provNode) {
+        var pinfo = p.info || {};
+        out += '<div class="fl-dp-row fl-dp-duchy" title="'
+          + esc(pinfo.desc || (pinfo.capital ? '省会 ' + pinfo.capital : ''))
+          + '">'
+          + '<span class="fl-dp-nm">' + esc(p.name) + '</span>'
+          + (pinfo.capital ? '<span class="fl-dp-tag">省会 ' + esc(pinfo.capital) + '</span>' : '')
+          + '<span class="fl-dp-tag" style="opacity:.55">' + (pinfo.cities || []).length + ' 城</span>'
           + '</div>';
         continue;
       }

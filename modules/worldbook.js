@@ -369,6 +369,116 @@
     return '';
   }
 
+  /**
+   * 从势力的「地理」条目里拆行省。
+   *
+   * 原文长这样（缩进是有意义的）：
+   *
+   *   地理:
+   *     区域分布:
+   *       艾瑟尼亚省:
+   *         介绍: 位于中部核心…
+   *         艾瑟嘉德(首都): “永恒的辉光之城”…
+   *         特色城镇: 白石镇
+   *       维里迪斯省:
+   *         金谷城(省会): 最大粮食集散地…
+   *
+   * 判据：
+   *   省   缩进 N 层、以「省/州/郡/大区/领地」结尾、后面跟冒号
+   *   城市 缩进 N+1 层、冒号前的名字带 (首都)/(省会)/(省府) 之类的身份
+   *        「特色城镇: 白石镇」这种是字段不是城市，要单独取冒号后的名字
+   *
+   * 只认世界书里真写了的，一个省都没写就返回空数组。
+   */
+  function parseProvinces(fac) {
+    var out = [];
+    var src = '';
+
+    // 「地理」类条目里才有区域分布
+    var pool = (fac.overview || []).concat(fac.places || []);
+    for (var i = 0; i < pool.length; i += 1) {
+      var c = String(pool[i].content || '');
+      if (c.indexOf('区域分布') < 0) continue;
+      src = c;
+      break;
+    }
+    if (!src) return out;
+
+    var lines = src.split(/\r?\n/);
+    var inBlock = false;
+    var baseIndent = -1;
+    var cur = null;
+
+    var indentOf = function (s) {
+      var m = String(s).match(/^(\s*)/);
+      return m ? m[1].replace(/\t/g, '  ').length : 0;
+    };
+    var PROV = /^(.{1,12}?)(省|州|郡|大区|行省|领地|辖区)\s*[:：]\s*$/;
+    for (var li = 0; li < lines.length; li += 1) {
+      var raw = lines[li];
+      if (!raw || !raw.trim()) continue;
+      var ind = indentOf(raw);
+      var txt = raw.trim();
+
+      if (txt.indexOf('区域分布') === 0) { inBlock = true; baseIndent = ind; continue; }
+      if (!inBlock) continue;
+      // 退回到跟「区域分布」同级或更浅，说明这一段结束了
+      if (ind <= baseIndent) { inBlock = false; cur = null; continue; }
+
+      // 省名行
+      var pm = txt.match(PROV);
+      if (pm) {
+        // 保留后缀：「艾瑟尼亚省」而不是「艾瑟尼亚」
+        cur = { name: pm[1].trim() + pm[2], capital: '', cities: [], desc: '' };
+        out.push(cur);
+        continue;
+      }
+      if (!cur) continue;
+
+      // 介绍：后面不跟城市
+      var im = txt.match(/^(介绍|说明|概述)\s*[:：]\s*(.*)$/);
+      if (im) { cur.desc = im[2].trim(); continue; }
+
+      /**
+       * 城市行。三种写法：
+       *   艾瑟嘉德(首都): …        ← 名字带身份
+       *   金谷城(省会): …          ← 名字带身份
+       *   特色城镇: 白石镇          ← 字段，名字在后面
+       *   霜临城(省会)             ← 没冒号
+       */
+      var fm = txt.match(/^(特色城镇|主要城市|城镇|城市|下辖)\s*[:：]\s*(.+)$/);
+      if (fm) {
+        var list = fm[2].split(/[，,、;；]/);
+        for (var q = 0; q < list.length; q += 1) {
+          var nm = stripParen(list[q]);
+          if (nm && cur.cities.indexOf(nm) < 0) cur.cities.push(nm);
+        }
+        continue;
+      }
+
+      var cm = txt.match(/^([^:：]{1,20}?)\s*[（(](首都|省会|省府|首府|主城)[）)]\s*(?:[:：].*)?$/);
+      if (cm) {
+        var cn = cm[1].trim();
+        if (cn && cur.cities.indexOf(cn) < 0) cur.cities.push(cn);
+        if (cm[2] === '省会' || cm[2] === '省府' || cm[2] === '首府') cur.capital = cn;
+        if (cm[2] === '首都') cur.capital = cn;
+        continue;
+      }
+
+      var names = txt.match(/^([^:：]{1,20}?)\s*[:：]\s*\S/);
+      if (names) {
+        var n2 = stripParen(names[1]);
+        if (n2 && /[城镇村堡垒港]$/.test(n2) && cur.cities.indexOf(n2) < 0) cur.cities.push(n2);
+      }
+    }
+    // 一个城市都没列出来的省不算
+    return out.filter(function (p) { return p.cities.length > 0; });
+  }
+
+  function stripParen(s) {
+    return String(s || '').replace(/[（(][^）)]*[）)]/g, '').replace(/[，,、;；。\s]+$/g, '').trim();
+  }
+
   function buildFactionTree(entries) {
     var factions = {};
 
@@ -632,6 +742,43 @@
           }
         }
       }
+
+      /**
+       * 行省层。
+       *
+       * 帝国总述里明写着「行政体系: 中央＞行省(王国级)＞郡/市/公国领＞镇＞村」，
+       * 「地理」条目里也按省列了城市：
+       *
+       *   区域分布:
+       *     艾瑟尼亚省:
+       *       介绍: 位于中部核心…
+       *       艾瑟嘉德(首都): "永恒的辉光之城"…
+       *       特色城镇: 白石镇
+       *     维里迪斯省:
+       *       金谷城(省会): 最大粮食集散地…
+       *
+       * 结构是「省名:」后面缩进一串城市行。这里按缩进层级把省和城市拆出来，
+       * 城市用括号里的（首都）（省会）标身份，用同省条目对名字。
+       */
+      var provinces = parseProvinces(fac);
+      for (var pi = 0; pi < provinces.length; pi += 1) {
+        var pv = provinces[pi];
+        for (var pj = 0; pj < pv.cities.length; pj += 1) {
+          for (var pk = 0; pk < fac.places.length; pk += 1) {
+            var pp = fac.places[pk];
+            if (pp.name !== pv.cities[pj]) continue;
+            pp.province = pv.name;
+            if (pv.name === (pv.capital || '')) pp.capital = true;
+          }
+        }
+        // 省会那个城
+        if (pv.capital) {
+          for (var pl = 0; pl < fac.places.length; pl += 1) {
+            if (fac.places[pl].name === pv.capital) fac.places[pl].provinceCapital = pv.name;
+          }
+        }
+      }
+      fac.provinces = provinces;
 
       /**
        * 势力体量概览。
