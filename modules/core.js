@@ -2386,8 +2386,7 @@
 .fl-dr-act .fl-btn { flex: 1 1 auto; }
 
 /* 归档入口条：有归档才出现 */
-.fl-archbar { margin: 0 0 10px; }
-.fl-arch-bar {
+.fl-archbar { margin: 0 0 10px; }.fl-arch-bar {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2401,6 +2400,103 @@
 }
 .fl-arch-bar b { color: var(--fl-accent); font-weight: 600; letter-spacing: .04em; }
 .fl-arch-bar:hover { color: var(--fl-ink); border-color: rgba(212, 175, 90, .45); }
+
+/* ---- 政体 ---- */
+.fl-gov-cur {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin: 0 0 12px;
+  padding: 9px 13px;
+  border-radius: 8px;
+  border: 1px solid rgba(212, 175, 90, .38);
+  background: rgba(212, 175, 90, .09);
+}
+.fl-gov-cur-l {
+  flex: none;
+  font-size: 10px;
+  letter-spacing: .12em;
+  color: var(--fl-dimmer);
+}
+.fl-gov-cur b { font-size: 14px; color: var(--fl-accent); letter-spacing: .04em; }
+.fl-gov-cur em { font-style: normal; font-size: 11px; color: var(--fl-dim); }
+.fl-gov-cur-x {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--fl-dimmer);
+  cursor: pointer;
+}
+.fl-gov-cur-x:hover { color: #e08a6a; }
+
+.fl-gov-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 8px;
+}
+.fl-gov-card {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--fl-line);
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.fl-gov-card:hover { border-color: rgba(212, 175, 90, .4); background: rgba(212, 175, 90, .05); }
+.fl-gov-card.on { border-color: rgba(212, 175, 90, .6); background: rgba(212, 175, 90, .11); }
+.fl-gov-card.open { border-color: rgba(212, 175, 90, .55); }
+.fl-gov-t { display: flex; align-items: baseline; gap: 7px; }
+.fl-gov-n { font-size: 13px; color: var(--fl-ink); letter-spacing: .04em; }
+.fl-gov-on {
+  margin-left: auto;
+  font-size: 9.5px;
+  color: var(--fl-accent);
+  border: 1px solid rgba(212, 175, 90, .45);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+.fl-gov-tag { font-size: 10px; color: var(--fl-dimmer); margin-top: 3px; }
+.fl-gov-axis { font-size: 11px; color: var(--fl-dim); margin-top: 5px; line-height: 1.5; }
+
+.fl-gov-detail {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px dashed rgba(212, 175, 90, .28);
+  background: rgba(0, 0, 0, .14);
+}
+.fl-gov-dt { font-size: 13px; color: var(--fl-accent); letter-spacing: .05em; }
+.fl-gov-dt i {
+  font-style: normal;
+  font-size: 9.5px;
+  color: var(--fl-dimmer);
+  border: 1px solid var(--fl-line);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-left: 6px;
+}
+.fl-gov-dd { font-size: 12px; color: var(--fl-dim); line-height: 1.7; margin-top: 7px; }
+.fl-gov-kv { display: flex; gap: 9px; font-size: 11.5px; margin-top: 6px; line-height: 1.6; }
+.fl-gov-kv span { flex: none; width: 4.6em; color: var(--fl-dimmer); }
+.fl-gov-kv b { font-weight: 400; color: var(--fl-ink); }
+.fl-gov-acts { margin-top: 11px; }
+
+.fl-gov-ai { margin-top: 14px; }
+.fl-gov-ai-r { display: flex; gap: 8px; }
+.fl-gov-in {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  padding: 7px 11px;
+  border-radius: 7px;
+  border: 1px solid var(--fl-line);
+  background: rgba(0, 0, 0, .18);
+  color: var(--fl-ink);
+}
+.fl-gov-in:focus { outline: none; border-color: rgba(212, 175, 90, .45); }
+.fl-gov-in::placeholder { color: var(--fl-dimmer); }
+.fl-gov-note { font-size: 11px; color: var(--fl-dimmer); margin-top: 7px; line-height: 1.65; }
+.fl-gov-note b { color: var(--fl-dim); font-weight: 400; }
+.fl-gov-note.err { color: #e08a7a; }
   .fl-card-n {
     flex: 1; min-width: 0; font-size: 14px; letter-spacing: .8px; color: var(--fl-bright);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -4597,7 +4693,7 @@
     // 政策不依赖领地数据，没领地也能用
     if (page === '政策') { renderPolicy(); return; }
     if (page === '外交') { renderDiplomacy(d); return; }
-    if (page === '历史') { viewEl.innerHTML = historyHtml(d); bindView(d); return; }
+    if (page === '历史') { viewEl.innerHTML = historyHtml(d); bindView(d); bindGov(); return; }
     if (selected === 'diag') {
       viewEl.innerHTML = diagHtml();
       return;
@@ -4776,18 +4872,210 @@
     return out;
   }
 
+  /* ---------------------------------------------------------- 政体 */
+  /**
+   * 政体选择。
+   *
+   * 五套参考 + AI 定制。选中的存在聊天变量里（跟笔记一样，不进 prompt）。
+   * 只是「你打算怎么治理」的一个标记，不改任何数值。
+   */
+  let govBusy = false;
+  let govErr = '';
+  let govIdea = '';
+  let govOpen = '';      // 展开了哪一张参考卡
+  let govBuilt = null;   // AI 生成的那套
+
+  function govRead() {
+    try {
+      const v = readChatVars();
+      if (v && v.fief_gov && typeof v.fief_gov === 'object') {
+        if (v.fief_gov.built && v.fief_gov.built.name) govBuilt = v.fief_gov.built;
+        return String(v.fief_gov.key || '');
+      }
+    } catch (e) { /* 忽略 */ }
+    return '';
+  }
+
+  function govWrite(key) {
+    try {
+      const v = readChatVars() || {};
+      v.fief_gov = { key: key || '', built: govBuilt || null, at: Date.now() };
+      writeChatVars({ fief_gov: v.fief_gov });
+    } catch (e) { /* 忽略 */ }
+  }
+
+  function govHtml(d) {
+    const mod = window.__fiefGov;
+    if (!mod) return '';
+    const cur = govRead();
+    const list = mod.PRESETS.slice();
+    if (govBuilt) list.push(govBuilt);
+
+    let out = '<div class="fl-dip-h"><b>政 体</b><em>Polity</em><s></s></div>';
+    out += '<div class="fl-sec-note" style="margin:0 0 12px">'
+      + '这套东西写的是「谁说了算、怎么决定、卡在哪」。它不改任何数值，只是你治理的底子。</div>';
+
+    // 已选
+    const picked = list.find((x) => x.key === cur);
+    if (picked) {
+      out += '<div class="fl-gov-cur">'
+        + '<span class="fl-gov-cur-l">当前</span>'
+        + '<b>' + esc(picked.name) + '</b>'
+        + (picked.tag ? '<em>' + esc(picked.tag) + '</em>' : '')
+        + '<span class="fl-gov-cur-x" data-gov-clear="1">取消</span>'
+        + '</div>';
+    }
+
+    // 五套参考
+    out += '<div class="fl-gov-grid">';
+    for (const g of mod.PRESETS) {
+      const on = g.key === cur ? ' on' : '';
+      const open = g.key === govOpen ? ' open' : '';
+      out += '<div class="fl-gov-card' + on + open + '" data-gov="' + esc(g.key) + '">'
+        + '<div class="fl-gov-t">'
+        + '<span class="fl-gov-n">' + esc(g.name) + '</span>'
+        + (on ? '<span class="fl-gov-on">已选</span>' : '')
+        + '</div>'
+        + (g.tag ? '<div class="fl-gov-tag">' + esc(g.tag) + '</div>' : '')
+        + (g.axis ? '<div class="fl-gov-axis">' + esc(g.axis) + '</div>' : '')
+        + '</div>';
+    }
+    out += '</div>';
+
+    // 展开的详情
+    if (govOpen) {
+      const g = list.find((x) => x.key === govOpen);
+      if (g) {
+        const rows = [
+          ['掌权', g.who],
+          ['权力来源', g.how],
+          ['受限', g.limit],
+          ['需要', g.need],
+          ['失效', g.fail],
+        ].filter((r) => r[1]);
+        out += '<div class="fl-gov-detail">'
+          + '<div class="fl-gov-dt">' + esc(g.name) + (g.custom ? ' <i>AI 拟</i>' : '') + '</div>'
+          + (g.desc ? '<div class="fl-gov-dd">' + esc(g.desc) + '</div>' : '')
+          + rows.map(([k, v]) => '<div class="fl-gov-kv"><span>' + k + '</span><b>' + esc(v) + '</b></div>').join('')
+          + (g.fit && g.fit.length ? '<div class="fl-gov-kv"><span>适合</span><b>' + g.fit.join(' · ') + '</b></div>' : '')
+          + '<div class="fl-gov-acts">'
+          + '<button class="fl-btn ghost" type="button" data-gov-set="' + esc(g.key) + '">'
+          + (g.key === cur ? '已选' : '用这套') + '</button>'
+          + '</div>'
+          + '</div>';
+      }
+    }
+
+    // AI 定制
+    const ai = window.__fiefAI;
+    out += '<div class="fl-gov-ai">'
+      + '<div class="fl-gov-ai-r">'
+      + '<input class="fl-gov-in" id="fl-gov-idea" type="text" maxlength="60" '
+      + 'placeholder="描述你想要的政体，比如「让贵族别那么横」" value="' + esc(govIdea) + '">'
+      + '<button class="fl-btn ghost" type="button" id="fl-gov-make"' + (ai ? '' : ' disabled') + '>'
+      + '' + (govBusy ? '拟定中…' : '让 AI 拟') + '</button>'
+      + '</div>'
+      + (ai ? '<div class="fl-gov-note">留空也行，AI 会按这块地的实际条件给一套。</div>'
+        : '<div class="fl-gov-note err">要用 AI 拟定，先去 设置 → API 配好接口。</div>');
+    if (govErr) out += '<div class="fl-gov-note err">' + esc(govErr) + '</div>';
+    if (govBuilt) {
+      out += '<div class="fl-gov-note">AI 拟过一套：<b>' + esc(govBuilt.name) + '</b>'
+        + '（点上面的卡片可以展开看）</div>';
+    }
+    out += '</div>';
+
+    return out;
+  }
+
+  function bindGov() {
+    if (!viewEl) return;
+    viewEl.querySelectorAll('[data-gov]').forEach((n) => {
+      n.addEventListener('click', () => {
+        const k = n.getAttribute('data-gov');
+        govOpen = govOpen === k ? '' : k;
+        render();
+      });
+    });
+    viewEl.querySelectorAll('[data-gov-set]').forEach((n) => {
+      n.addEventListener('click', () => {
+        const k = n.getAttribute('data-gov-set');
+        govWrite(k);
+        govOpen = '';
+        toast('已选：' + (window.__fiefGov.get(k) || govBuilt || {}).name);
+        render();
+      });
+    });
+    const clr = viewEl.querySelector('[data-gov-clear]');
+    if (clr) clr.addEventListener('click', () => { govWrite(''); render(); });
+
+    const inp = viewEl.querySelector('#fl-gov-idea');
+    if (inp) {
+      inp.addEventListener('input', () => { govIdea = inp.value; });
+      inp.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); buildGov(); }
+      });
+    }
+    const mk = viewEl.querySelector('#fl-gov-make');
+    if (mk) mk.addEventListener('click', buildGov);
+  }
+
+  function buildGov() {
+    const mod = window.__fiefGov;
+    const ai = window.__fiefAI;
+    if (!mod || !ai || govBusy) return;
+    const d = currentDomain();
+    govBusy = true; govErr = '';
+    render();
+
+    let userText = '';
+    try {
+      userText = mod.buildUser({
+        domain: d ? d.name : '',
+        faction: (d && d.meta && d.meta.势力) || '',
+        scale: (d && d.规模档) || (d && d.info && d.info.规模) || '',
+        pop: (d && d.info && d.info.人口) || '',
+        treasury: (d && d.info && d.info.金库) || '',
+        buildings: d && d.items ? d.items.length : 0,
+        idea: govIdea,
+      });
+    } catch (e) {
+      govBusy = false; govErr = '拼提示词出错：' + ((e && e.message) || e); render(); return;
+    }
+
+    ai.chat(userText, {
+      system: mod.SYSTEM,
+      temperature: 0.8,
+      maxTokens: 1200,
+      module: 'policy',
+    }).then((text) => {
+      const norm = mod.normalize(mod.parse(text));
+      govBuilt = norm;
+      govBusy = false;
+      govOpen = 'custom';
+      govWrite('custom');
+      toast('拟好了：' + norm.name);
+      render();
+    }).catch((e) => {
+      govBusy = false;
+      govErr = String((e && e.message) || e).slice(0, 200);
+      render();
+    });
+  }
+
   function historyHtml(d) {
+    // 政体块永远在：这是玩家要能随时看、随时换的东西，跟有没有流水无关
+    let html = govHtml(d);
     const evs = historyEvents();
     if (!evs.length) {
-      return `<div class="fl-empty"><b>◇</b>历史 · 开发中
-        <small>档案库里还没有任何变更记录</small>
+      html += `<div class="fl-empty"><b>◇</b>还没有变更记录
         <small>建筑每变一次（状态、品质、数量、位置）这里会记一条</small></div>`;
+      return html;
     }
     const names = new Set(evs.map((e) => e.name));
     const lows = evs.filter((e) => e.idx >= 0).map((e) => e.idx);
     const first = lows.length ? Math.min.apply(null, lows) : -1;
 
-    let html = `<div class="fl-dip-h"><b>变 更 流 水</b><em>Chronicle</em><s></s></div>
+    html += `<div class="fl-dip-h" style="margin-top:20px"><b>变 更 流 水</b><em>Chronicle</em><s></s></div>
       <div class="fl-sec-note" style="margin:0 0 14px">共 <b>${evs.length}</b> 条 · 涉及 <b>${names.size}</b> 座建筑`
       + (first >= 0 ? ` · 最早记于 <b>#${first + 1}</b> 楼` : '')
       + `。只记变化，不记重复读取。</div>`;
