@@ -1,13 +1,13 @@
 {
   "name": "fief-ledger",
   "displayName": "领地档案",
-  "version": "0.9.36",
+  "version": "0.9.37",
   "channel": "stable",
   "schemaVersion": 1,
   "loaderMin": "0.1.0",
   "publishedAt": "2026-10-27",
   "moduleCount": 13,
-  "totalBytes": 481351,
+  "totalBytes": 484872,
   "modules": [
     {
       "path": "modules/worldbook.js",
@@ -24,14 +24,14 @@
     {
       "path": "modules/policy.css.js",
       "desc": "政令样式",
-      "bytes": 17769,
-      "sha256": "65ea3be6b598ab89ab4bf2535a6b1254a967912ff3e3c7f2ca1a61ade9c7b6b9"
+      "bytes": 18415,
+      "sha256": "939caaeea7cf8b65c55f0b5801cbfce9e291d832e355347a5f1fa9d5893158b2"
     },
     {
       "path": "modules/policy.ui.js",
       "desc": "政令抽卡界面",
-      "bytes": 24437,
-      "sha256": "8b01248e3ee2b5ac63d5fdfd6b4d75a8840ab98bfada4f06dd702f35a98a1cbc"
+      "bytes": 26577,
+      "sha256": "4f200370bf9ceeeab1e379917459083c4d642b67a6af3d017473947cc249ed7b"
     },
     {
       "path": "modules/ai.css.js",
@@ -84,8 +84,8 @@
     {
       "path": "modules/core.js",
       "desc": "主脚本",
-      "bytes": 249819,
-      "sha256": "f5941116599879dbcc6faee0dad581a87ef49a83f4ae8ac739cfb985d5829ab5"
+      "bytes": 250554,
+      "sha256": "b36b8a2a33a54f7724f733bae884883692d594a4d1565b59e6c8d49858fae66f"
     }
   ]
 }
