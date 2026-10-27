@@ -1,13 +1,13 @@
 {
   "name": "fief-ledger",
   "displayName": "领地档案",
-  "version": "0.9.37",
+  "version": "0.9.38",
   "channel": "stable",
   "schemaVersion": 1,
   "loaderMin": "0.1.0",
   "publishedAt": "2026-10-27",
   "moduleCount": 13,
-  "totalBytes": 484872,
+  "totalBytes": 485365,
   "modules": [
     {
       "path": "modules/worldbook.js",
@@ -24,8 +24,8 @@
     {
       "path": "modules/policy.css.js",
       "desc": "政令样式",
-      "bytes": 18415,
-      "sha256": "939caaeea7cf8b65c55f0b5801cbfce9e291d832e355347a5f1fa9d5893158b2"
+      "bytes": 18455,
+      "sha256": "0225013ff474b88f555fe42bda10a259619b5ca9e59cbaa096b48d8ffe3b4550"
     },
     {
       "path": "modules/policy.ui.js",
@@ -36,8 +36,8 @@
     {
       "path": "modules/ai.css.js",
       "desc": "AI 面板样式",
-      "bytes": 13828,
-      "sha256": "b7ca71ad26836fb3bc07fd31e270364f6c6953d14d2fa844d07cff5d28203ccf"
+      "bytes": 13868,
+      "sha256": "f6e23c3cc0d65aebc9d4c5819245a5ea85ac20428b0e6454dc9ec7de679b6ebb"
     },
     {
       "path": "modules/ai.chan.js",
@@ -84,8 +84,8 @@
     {
       "path": "modules/core.js",
       "desc": "主脚本",
-      "bytes": 250554,
-      "sha256": "b36b8a2a33a54f7724f733bae884883692d594a4d1565b59e6c8d49858fae66f"
+      "bytes": 250967,
+      "sha256": "8359d45ff9ca2f43cc17f4e88e16bff9dcf51821bd5a063b3d8d478e4e08710d"
     }
   ]
 }
