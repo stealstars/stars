@@ -5127,6 +5127,7 @@
         pop: (d && d.info && d.info.人口) || '',
         treasury: (d && d.info && d.info.金库) || '',
         buildings: d && d.items ? d.items.length : 0,
+        buildingNames: (d && d.items ? d.items : []).map((x) => x.name).filter(Boolean),
         idea: govIdea,
       });
     } catch (e) {

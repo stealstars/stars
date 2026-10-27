@@ -63,30 +63,98 @@ console.log('\n=== 3. 提示词口径 ===');
 {
   const s = G.SYSTEM;
   ok('说明政体不是加成', /不是加成/.test(s));
-  ok('要求说清谁说了算', /谁说了算/.test(s));
   ok('禁止数值加成', /绝对不写数值加成/.test(s));
   ok('禁止古风堆砌', /不要古风骈文/.test(s));
   ok('要求贴合规模', /贴合这块地的规模/.test(s));
   ok('矛盾时要指出来', /矛盾/.test(s));
   ok('limit 不许空话', /不能写空话/.test(s));
   ok('要求严格 JSON', /严格 JSON/.test(s));
-  ok('字段含 who/how/limit/need/fail',
-    /"who"/.test(s) && /"how"/.test(s) && /"limit"/.test(s) && /"need"/.test(s) && /"fail"/.test(s));
+
+  console.log('  -- 出发点必须是领地，不是国家 --');
+  ok('写明「不是国家」', /不是国家/.test(s));
+  ok('写明玩家不是皇帝', /他不是皇帝/.test(s));
+  ok('写明尺度是村子到超级城市', /村庄.*超级城市|超级城市/.test(s));
+  ok('禁止写国体主权民族宪法', /不要写国家的国体/.test(s));
+  ok('禁止写举国之力', /举国之力/.test(s));
+  ok('要求想具体有什么', /几个家族.*教堂.*市集/.test(s));
+  ok('who 要具体的人或小团体', /具体的人或小团体/.test(s));
+
+  console.log('  -- 主义要翻译成本地的事 --');
+  ok('有「关于主义」一节', /【关于「主义」】/.test(s));
+  ok('点名格式塔', /格式塔/.test(s));
+  ok('点名蜂巢', /蜂巢/.test(s));
+  ok('点名共产', /共产/.test(s));
+  ok('给出翻译规则', /翻译/.test(s));
+  ok('要求用本地说法', /这块地上的叫法/.test(s));
+  ok('禁止直接搬政治学术语', /不要用政治学术语/.test(s));
+}
+
+console.log('\n=== 3b. 五套参考必须是领地尺度 ===');
+{
+  // 旧版写的是「君主」「教皇」「贵族」「议会」「小国或帝国行省」
+  const BIG = ['帝国', '王国', '大国', '小国', '行省', '君主', '教皇', '贵族', '议会', '邦国'];
+  for (const g of G.PRESETS) {
+    const all = [g.name, g.tag, g.axis, g.desc, g.who, g.how, g.limit, g.need, g.fail].join(' ');
+    const hit = BIG.filter((w) => all.indexOf(w) >= 0);
+    ok(g.name + ' 没有国家尺度词', hit.length === 0, hit.join('、'));
+  }
+  // 适合规模都得落在城市以下
+  for (const g of G.PRESETS) {
+    ok(g.name + ' 不声称适合大国', g.fit.indexOf('大国') < 0 && g.fit.indexOf('小国或帝国行省') < 0,
+      g.fit.join('/'));
+  }
+  ok('封建改叫领主分封', G.get('封建').name === '领主分封', G.get('封建').name);
+  ok('集权改叫流官直辖', G.get('集权').name === '流官直辖', G.get('集权').name);
+  ok('共和改叫市集共议', G.get('共和').name === '市集共议', G.get('共和').name);
+  ok('神权改叫教权治所', G.get('神权').name === '教权治所', G.get('神权').name);
+  ok('自治改叫城社自理', G.get('自治').name === '城社自理', G.get('自治').name);
+}
+
+console.log('\n=== 3c. 大词要拦下来 ===');
+{
+  ok('有 bigWordIn', typeof G.bigWordIn === 'function');
+  ok('拦住格式塔', G.bigWordIn('格式塔共治') === '格式塔', G.bigWordIn('格式塔共治'));
+  ok('拦住蜂巢', G.bigWordIn('蜂巢体制') === '蜂巢', G.bigWordIn('蜂巢体制'));
+  ok('拦住共产', G.bigWordIn('共产共治') === '共产', G.bigWordIn('共产共治'));
+  ok('放行长老议事', !G.bigWordIn('长老议事'));
+  ok('放行一家独断', !G.bigWordIn('一家独断'));
+  ok('放行市集共管', !G.bigWordIn('市集共管'));
+
+  let threw = false, msg = '';
+  try { G.normalize({ name: '格式塔蜂巢' }); } catch (e) { threw = true; msg = e.message; }
+  ok('归一化会拒绝大词', threw);
+  ok('错误信息说清了原因', /国家或文明尺度/.test(msg), msg.slice(0, 40));
+  ok('错误信息给了出路', /换个说法/.test(msg));
+
+  const good = G.normalize({ name: '长老议事', who: '三位族老' });
+  ok('本地说法能通过', good.name === '长老议事');
 }
 
 console.log('\n=== 4. 拼用户提示词 ===');
 {
   const t = G.buildUser({
     domain: '青石村', faction: '奥古斯提姆帝国', scale: '村庄',
-    pop: '数百', treasury: '3万Z', buildings: 7, idea: '让贵族别那么横',
+    pop: '数百', treasury: '3万Z', buildings: 7,
+    buildingNames: ['村公所', '磨坊', '水井', '祠堂'],
+    idea: '让贵族别那么横',
   });
   ok('带上了领地名', /青石村/.test(t));
   ok('带上了规模', /村庄/.test(t));
   ok('带上了人口', /数百/.test(t));
-  ok('带上了建筑数', /7/.test(t));
+  ok('带上了建筑数', /7 \u5904/.test(t));
+  ok('带上了建筑名', /磨坊/.test(t) && /村公所/.test(t));
   ok('带上了诉求', /让贵族别那么横/.test(t));
-  const t2 = G.buildUser({ domain: 'x', idea: '' });
-  ok('没诉求时给默认话术', /没有特别说明/.test(t2));
+  ok('标明归属是上级不是本地结构', /这是上级，不是本地的治理结构/.test(t) || /上级，不是本地/.test(t));
+  ok('标题是「这块地」', /【这块地】/.test(t));
+  ok('要求是治理结构不是政体', /治理结构/.test(t));
+
+  // 带大词时要额外提醒
+  const t2 = G.buildUser({ domain: 'x', idea: '我想搞格式塔蜂巢' });
+  ok('大词诉求会额外提醒', /不要照搬名词/.test(t2));
+  ok('提醒里点了共产格式塔', /共产/.test(t2) && /格式塔/.test(t2));
+
+  const t3 = G.buildUser({ domain: 'x', idea: '' });
+  ok('没诉求时给默认话术', /没有特别说明/.test(t3));
 }
 
 console.log('\n=== 5. 解析与归一化 ===');
