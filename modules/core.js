@@ -2429,13 +2429,18 @@
 }
 .fl-gov-cur b { font-size: 14px; color: var(--fl-accent); letter-spacing: .04em; }
 .fl-gov-cur em { font-style: normal; font-size: 11px; color: var(--fl-dim); }
-.fl-gov-cur-x {
+.fl-gov-cur-btns {
   margin-left: auto;
-  font-size: 11px;
-  color: var(--fl-dimmer);
-  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
 }
-.fl-gov-cur-x:hover { color: #e08a6a; }
+.fl-gov-sm {
+  padding: 3px 10px;
+  font-size: 11px;
+  line-height: 1.5;
+}
 
 .fl-gov-grid {
   display: grid;
@@ -2486,7 +2491,7 @@
 .fl-gov-kv { display: flex; gap: 9px; font-size: 11.5px; margin-top: 6px; line-height: 1.6; }
 .fl-gov-kv span { flex: none; width: 4.6em; color: var(--fl-dimmer); }
 .fl-gov-kv b { font-weight: 400; color: var(--fl-ink); }
-.fl-gov-acts { margin-top: 11px; }
+.fl-gov-acts { margin-top: 11px; display: flex; gap: 8px; flex-wrap: wrap; }
 
 .fl-gov-ai { margin-top: 14px; }
 .fl-gov-ai-r { display: flex; gap: 8px; }
@@ -4920,10 +4925,39 @@
 
   function govWrite(key) {
     try {
-      const v = readChatVars() || {};
-      v.fief_gov = { key: key || '', built: govBuilt || null, at: Date.now() };
-      writeChatVars({ fief_gov: v.fief_gov });
+      writeChatVars({ fief_gov: { key: key || '', built: govBuilt || null, at: Date.now() } });
     } catch (e) { /* 忽略 */ }
+  }
+
+  /** 选中的政体对象，没有就 null */
+  function govCurrent() {
+    const mod = window.__fiefGov;
+    if (!mod) return null;
+    const key = govRead();
+    if (!key) return null;
+    if (key === 'custom') return govBuilt || null;
+    return mod.get(key);
+  }
+
+  /** 拼成能填进聊天框的一段话 */
+  function govCommand() {
+    const g = govCurrent();
+    if (!g) return '';
+    const d = currentDomain();
+    const L = [];
+    L.push('[政体] ' + g.name + (g.tag ? '（' + g.tag + '）' : ''));
+    if (d) L.push('[领地] ' + d.name);
+    if (g.axis) L.push('[核心矛盾] ' + g.axis);
+    if (g.desc) L.push('[形态] ' + g.desc);
+    const rows = [
+      ['掌权', g.who],
+      ['权力来源', g.how],
+      ['受限', g.limit],
+      ['需要', g.need],
+      ['失效', g.fail],
+    ].filter((r) => r[1]);
+    for (const [k, v] of rows) L.push('[' + k + '] ' + v);
+    return L.join('\n');
   }
 
   function govHtml(d) {
@@ -4944,7 +4978,10 @@
         + '<span class="fl-gov-cur-l">当前</span>'
         + '<b>' + esc(picked.name) + '</b>'
         + (picked.tag ? '<em>' + esc(picked.tag) + '</em>' : '')
-        + '<span class="fl-gov-cur-x" data-gov-clear="1">取消</span>'
+        + '<span class="fl-gov-cur-btns">'
+        + '<button class="fl-btn ghost fl-gov-sm" type="button" id="fl-gov-send">填进聊天框</button>'
+        + '<button class="fl-btn ghost fl-gov-sm" type="button" data-gov-clear="1">取消</button>'
+        + '</span>'
         + '</div>';
     }
 
@@ -4983,6 +5020,7 @@
           + '<div class="fl-gov-acts">'
           + '<button class="fl-btn ghost" type="button" data-gov-set="' + esc(g.key) + '">'
           + (g.key === cur ? '已选' : '用这套') + '</button>'
+          + (g.key === cur ? '<button class="fl-btn ghost" type="button" id="fl-gov-send2">填进聊天框</button>' : '')
           + '</div>'
           + '</div>';
       }
@@ -5022,14 +5060,41 @@
     viewEl.querySelectorAll('[data-gov-set]').forEach((n) => {
       n.addEventListener('click', () => {
         const k = n.getAttribute('data-gov-set');
+        // 已经是这套了就别再写一遍，也别把展开的详情收掉
+        if (k === govRead()) { toast('已经是这套了'); return; }
         govWrite(k);
         govOpen = '';
-        toast('已选：' + (window.__fiefGov.get(k) || govBuilt || {}).name);
+        const g = window.__fiefGov.get(k) || govBuilt || {};
+        toast('已选：' + (g.name || k));
         render();
       });
     });
+
+    // 取消：真的能取消
     const clr = viewEl.querySelector('[data-gov-clear]');
-    if (clr) clr.addEventListener('click', () => { govWrite(''); render(); });
+    if (clr) {
+      clr.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        govWrite('');
+        govOpen = '';
+        toast('已取消政体');
+        render();
+      });
+    }
+
+    // 填进聊天框：这才是「发出去」
+    const send = (ev) => {
+      ev.preventDefault();
+      const txt = govCommand();
+      if (!txt) { toast('先选一套政体'); return; }
+      fillComposer(txt);
+      toast('政体已填进聊天框，可再改');
+    };
+    const b1 = viewEl.querySelector('#fl-gov-send');
+    if (b1) b1.addEventListener('click', send);
+    const b2 = viewEl.querySelector('#fl-gov-send2');
+    if (b2) b2.addEventListener('click', send);
 
     const inp = viewEl.querySelector('#fl-gov-idea');
     if (inp) {

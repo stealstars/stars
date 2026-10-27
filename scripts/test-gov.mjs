@@ -156,7 +156,7 @@ console.log('\n=== 9. 存到聊天变量 ===');
 {
   ok('有 fief_gov', /fief_gov/.test(CORE));
   ok('读变量', /v\.fief_gov\.key/.test(CORE));
-  ok('写变量', /v\.fief_gov = \{ key/.test(CORE));
+  ok('写变量', /writeChatVars\(\{ fief_gov: \{ key/.test(CORE));
   ok('存了 AI 那套', /built: govBuilt/.test(CORE));
   ok('重启后能恢复 AI 那套', /v\.fief_gov\.built && v\.fief_gov\.built\.name/.test(CORE));
 }
@@ -182,6 +182,44 @@ console.log('\n=== 12. 按钮不许静默失效 ===');
 {
   ok('政体按钮不用 disabled', /\(ai \? '' : ' aria-disabled="true"'\)/.test(CORE));
   ok('buildGov 以输入框为准', /const el = viewEl && viewEl\.querySelector\('#fl-gov-idea'\)/.test(CORE));
+}
+
+console.log('\n=== 13. 选了要能用：填进聊天框 ===');
+{
+  // 之前一个字都没有：选了只能看着，发不出去
+  ok('有 govCommand', /function govCommand\(\)/.test(CORE));
+  ok('有 govCurrent', /function govCurrent\(\)/.test(CORE));
+  ok('拼了 [政体] 段', /'\[政体\] '/.test(CORE));
+  ok('拼了 [核心矛盾]', /\[核心矛盾\]/.test(CORE));
+  ok('拼了 [掌权]', /'掌权', g\.who/.test(CORE));
+  ok('拼了 [失效]', /'失效', g\.fail/.test(CORE));
+  ok('调 fillComposer', /fillComposer\(txt\)/.test(CORE));
+  ok('有发送按钮', /id="fl-gov-send"/.test(CORE));
+  ok('详情里也能发', /id="fl-gov-send2"/.test(CORE));
+  ok('没选时会提示', /先选一套政体/.test(CORE));
+}
+
+console.log('\n=== 14. 取消要真的能取消 ===');
+{
+  ok('取消是 button 不是 span', /<button[^>]*data-gov-clear/.test(CORE));
+  ok('取消调 govWrite 空串', /govWrite\(''\)/.test(CORE));
+  ok('取消后清展开态', /govWrite\(''\);[\s\S]{0,80}govOpen = ''/.test(CORE));
+  ok('取消阻止冒泡', /e\.stopPropagation\(\)/.test(CORE));
+  ok('取消有反馈', /已取消政体/.test(CORE));
+  // 旧写法是 span，点了可能在移动端没反应
+  ok('不再是 span', !/<span class="fl-gov-cur-x"/.test(CORE));
+}
+
+console.log('\n=== 15. 点「已选」不该没反应 ===');
+{
+  ok('已选时给提示', /已经是这套了/.test(CORE));
+  ok('已选时不重复写', /if \(k === govRead\(\)\)/.test(CORE));
+}
+
+console.log('\n=== 16. 存储链路没有死代码 ===');
+{
+  ok('govWrite 不再读一遍又丢掉', !/const v = readChatVars\(\) \|\| \{\};\s*\n\s*v\.fief_gov/.test(CORE));
+  ok('govWrite 直接写 patch', /writeChatVars\(\{ fief_gov:/.test(CORE));
 }
 
 console.log('\n' + (fail ? fail + ' 项失败' : '全部通过 ✔') + '  ' + pass + ' 项');
