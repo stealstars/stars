@@ -1,13 +1,13 @@
 {
   "name": "fief-ledger",
   "displayName": "领地档案",
-  "version": "0.9.39",
+  "version": "0.9.40",
   "channel": "stable",
   "schemaVersion": 1,
   "loaderMin": "0.1.0",
   "publishedAt": "2026-10-27",
   "moduleCount": 13,
-  "totalBytes": 487464,
+  "totalBytes": 488849,
   "modules": [
     {
       "path": "modules/worldbook.js",
@@ -36,20 +36,20 @@
     {
       "path": "modules/ai.css.js",
       "desc": "AI 面板样式",
-      "bytes": 13868,
-      "sha256": "f6e23c3cc0d65aebc9d4c5819245a5ea85ac20428b0e6454dc9ec7de679b6ebb"
+      "bytes": 14396,
+      "sha256": "46f6158dc71083a7765601ba169e480d845d5277cb5a68f48383b8b0873aa996"
     },
     {
       "path": "modules/ai.chan.js",
       "desc": "AI 通道",
-      "bytes": 15253,
-      "sha256": "5a37c1dfb2640ef4cc4ae119c5707689b2269671b495664177fd9988d1a49e8a"
+      "bytes": 15298,
+      "sha256": "f031b07f2d053d1e16e382a37375392de16b9254721e1f5e18694a7bdd132b12"
     },
     {
       "path": "modules/ai.settings.js",
       "desc": "AI 凭据面板",
-      "bytes": 11364,
-      "sha256": "b4ed035ddeccb4c870a428ff4822320211016e73768a4d29fb5a8e3c00985d44"
+      "bytes": 12176,
+      "sha256": "882e9bd978c9e4d95666c3f770cc0e02fefedce8c61fc1d814fa2b1cc63e7084"
     },
     {
       "path": "modules/diplo.css.js",
