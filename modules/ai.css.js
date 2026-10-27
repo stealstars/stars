@@ -15,6 +15,22 @@
   }
   .fl-aic-sub { font-size: 12px; color: rgba(var(--fl-text-rgb), .42); letter-spacing: .3px; }
 
+  /* 这个通道服务于哪几个功能：配之前就能看出配了有什么用 */
+  .fl-aic-uses {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    padding: 12px 0 0;
+  }
+  .fl-aic-uses-l {
+    flex: none; font-size: 11px; letter-spacing: .06em;
+    color: rgba(var(--fl-text-rgb), .32);
+  }
+  .fl-aic-use {
+    font-size: 11px; padding: 2px 8px; border-radius: 3px;
+    color: var(--fl-dim);
+    border: 1px solid rgba(var(--fl-accent-rgb), .2);
+    background: rgba(var(--fl-accent-rgb), .05);
+  }
+
   .fl-aic-tabs { display: flex; gap: 6px; padding: 14px 0 0; flex-wrap: wrap; }
   .fl-aic-tab {
     padding: 5px 13px; border-radius: 4px; cursor: pointer;

@@ -135,6 +135,18 @@ console.log('\n=== 界面不许把密钥吐出来 ===');
   // 状态行只剩「已保存 / 本机可写」
   ok('状态行说已保存', html.indexOf('已保存') >= 0);
   ok('状态行不报地址', html.indexOf('地址 ') < 0);
+
+  console.log('\n=== API 面板要说清配了有什么用 ===');
+  {
+    // 原来写着「目前只有外交用得上」，政策与政体接上了却没更新
+    ok('不再说只有外交用', sett.indexOf('目前只有「外交」用得上') < 0);
+    ok('注明了三个用途', /外交页/.test(sett) && /政策页/.test(sett) && /历史页/.test(sett));
+    ok('面板渲染了用途', html.indexOf('fl-aic-uses') >= 0);
+    ok('列出外交建档', html.indexOf('外交页 · 建档') >= 0);
+    ok('列出政策合成/自创', html.indexOf('政策页 · 合成 / 自创') >= 0);
+    ok('列出政体拟定', html.indexOf('历史页 · 政体拟定') >= 0);
+    ok('副标题改成配一次', html.indexOf('配一次') >= 0);
+  }
 }
 
 console.log('\n=== 存储可用性 ===');

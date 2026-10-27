@@ -7,14 +7,23 @@
  *   + 测试连接
  *
  * 每个模块单独配置，也可以一键应用到全部模块。
- * 目前只有「外交」用得上，其余留空待接。
+ *
+ * 目前「外交 / 政策 / 政体」三个用途共用同一套凭据：
+ *   外交  打探他国领地、生成对外情报
+ *   政策  合成已选政令、按一句话自创新政
+ *   政体  按领地条件拟一套治理结构
+ * 三者在 chan 里都归一到「外交」这一个配置槽，配一次就够。
  * ========================================================================== */
 (() => {
   'use strict';
 
-  /** 模块清单：以后接历史页、情报页就在这里加一行 */
+  /** 模块清单：以后接新用途就在这里加一行 */
   const MODULES = [
-    { k: '外交', desc: '打探他国领地、生成对外情报' },
+    {
+      k: '外交',
+      desc: '打探他国领地、生成对外情报',
+      uses: ['外交页 · 建档', '政策页 · 合成 / 自创', '历史页 · 政体拟定'],
+    },
     // { k: '历史', desc: '……' },
   ];
 
@@ -67,11 +76,21 @@
       distHtml = `<div class="fl-aic-dist">共 ${models.length} 个　${chips.join('')}</div>`;
     }
 
+    // 这个槽位现在被哪些页用着，直接写出来，免得以为配了没处用
+    const curDef = MODULES.find((m) => m.k === cur) || MODULES[0] || {};
+    const usesHtml = (curDef.uses && curDef.uses.length)
+      ? '<div class="fl-aic-uses">'
+        + '<span class="fl-aic-uses-l">这个通道用在</span>'
+        + curDef.uses.map((u) => '<span class="fl-aic-use">' + escFn(u) + '</span>').join('')
+        + '</div>'
+      : '';
+
     return `<div class="fl-aic">
       <div class="fl-aic-head">
         <div class="fl-aic-title">独立 API 凭据</div>
-        <div class="fl-aic-sub">每个模块可单独配置，也可一键应用到全部模块</div>
+        <div class="fl-aic-sub">配一次，下面这些功能都能用</div>
       </div>
+      ${usesHtml}
       ${list}
 
       <div class="fl-aic-f">
