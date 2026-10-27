@@ -292,7 +292,7 @@
     border-radius: 7px;
     border: 1px solid var(--fl-line);
     /* 不透明深色底：半透明叠在浅色父层上会变白，字就看不见 */
-    background: #14110b;
+    background: var(--fl-surface2, #14110b);
     color: rgb(var(--fl-text-rgb));
     -webkit-text-fill-color: rgb(var(--fl-text-rgb));
     caret-color: rgb(var(--fl-text-rgb));
@@ -304,7 +304,7 @@
   .fl-pai-in:-webkit-autofill:hover,
   .fl-pai-in:-webkit-autofill:focus {
     -webkit-text-fill-color: rgb(var(--fl-text-rgb));
-    -webkit-box-shadow: 0 0 0 1000px #14110b inset;
+    -webkit-box-shadow: 0 0 0 1000px var(--fl-surface2, #14110b) inset;
     transition: background-color 9999s ease-out;
   }
   .fl-pai-note { font-size: 11px; color: var(--fl-dimmer); line-height: 1.65; }

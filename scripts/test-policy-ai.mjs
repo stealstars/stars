@@ -182,13 +182,14 @@ console.log('\n=== 9b. 按钮不许静默失效 ===');
 
 console.log('\n=== 9c. 输入框不许白底白字 ===');
 {
-  ok('自创框不透明底', /background: #14110b/.test(CSS_SRC));
+  ok('自创框不透明底', /background: var\(--fl-surface2/.test(CSS_SRC));
   ok('自创框用 text-rgb', /color: rgb\(var\(--fl-text-rgb\)\)/.test(CSS_SRC));
   ok('自创框有 fill-color', /-webkit-text-fill-color/.test(CSS_SRC));
   ok('自创框有 caret-color', /caret-color/.test(CSS_SRC));
   ok('挡住自动填充白底', /-webkit-autofill/.test(CSS_SRC));
   ok('placeholder 用低透明度文字色', /\.fl-pai-in::placeholder \{ color: rgba\(var\(--fl-text-rgb\)/.test(CSS_SRC));
   ok('不再用半透明黑底', !/\.fl-pai-in \{[\s\S]{0,300}background: rgba\(0,0,0,\.18\)/.test(CSS_SRC));
+  ok('底色跟随主题', /--fl-surface2/.test(CSS_SRC));
   ok('aria-disabled 有样式', /\.fl-pai-btn\[aria-disabled="true"\]/.test(CSS_SRC));
 }
 

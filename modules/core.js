@@ -266,16 +266,25 @@
     );
   }
 
-  /** 由主色推整套配色：暗底四层、文字、标题白、星标球面 */
+  /**
+   * 由主色推整套配色：暗底四层、文字、标题白、星标球面
+   *
+   * 混合系数 t 决定「主色在底色里占多少」。t 越大越黑。
+   * 之前写的是 0.955，意思是 95.5% 是近黑色、主色只占 4.5%，
+   * 结果八个主题的背景全在 #09~#0e 之间，肉眼分不出来，选哪个都是黑。
+   *
+   * 现在放到 0.80 一档：底色能明显看出是琥珀、青玉还是朱砂，
+   * 但仍在暗色区间，白字对比度够。
+   */
   function paletteOf(accentHex) {
     const accent = normHex(accentHex) || DEFAULT_ACCENT;
     return {
       accent,
       rgb: hexToRgb(accent).join(','),
-      bg: mixHex(accent, '#050404', 0.955),
-      bg2: mixHex(accent, '#080706', 0.945),
-      surface: mixHex(accent, '#0c0a08', 0.93),
-      surface2: mixHex(accent, '#100e0b', 0.918),
+      bg: mixHex(accent, '#0a0806', 0.80),
+      bg2: mixHex(accent, '#0d0b08', 0.76),
+      surface: mixHex(accent, '#120f0b', 0.70),
+      surface2: mixHex(accent, '#181410', 0.65),
       text: mixHex('#ece2cc', accent, 0.13),
       bright: mixHex('#f8f1dd', accent, 0.09),
       star1: mixHex(accent, '#000000', 0.6),
