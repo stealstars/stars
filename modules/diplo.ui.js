@@ -277,11 +277,21 @@
     for (var i = 0; i < fs.length; i += 1) {
       var f = fs[i];
       var on = f.name === S.faction ? ' on' : '';
+      var sz = f.size || {};
+      // 主体：有公国的说公国，没有的说城市。这是「国家大块」那一行
+      var big = '';
+      if (sz.duchies) big = sz.duchies + ' 公国';
+      else if (sz.cities) big = sz.cities + ' 城';
       out += '<div class="fl-dw-card' + on + '" data-dw-faction="' + esc(f.name) + '">'
         + '<div class="fl-dw-nm">' + esc(f.name) + '</div>'
-        + '<div class="fl-dw-sub">' + esc(f.kind) + '</div>'
+        + '<div class="fl-dw-sub">' + esc(f.kind || '') + '</div>'
         + '<div class="fl-dw-cnt">'
-        + (f.places.length ? f.places.length + ' 处 <i>地点</i>' : '<i>暂无地点条目</i>')
+        + (big ? '<b>' + esc(big) + '</b>' : '')
+        + (sz.regions ? '<i>' + sz.regions + ' 疆域</i>' : '')
+        + (sz.districts ? '<i>' + sz.districts + ' 城区</i>' : '')
+        + (!big && !sz.regions && !sz.districts
+          ? (f.places.length ? '<i>' + f.places.length + ' 处地点</i>' : '<i>暂无地点条目</i>')
+          : '')
         + '</div></div>';
     }
     out += '</div>';
@@ -876,8 +886,14 @@
 
     var f = currentFaction();
     if (f) {
+      var sz2 = f.size || {};
+      var meta = [];
+      if (sz2.duchies) meta.push(sz2.duchies + ' 公国');
+      if (sz2.regions) meta.push(sz2.regions + ' 疆域');
+      if (sz2.cities) meta.push(sz2.cities + ' 城');
+      if (sz2.districts) meta.push(sz2.districts + ' 城区');
       out += '<div class="fl-dip-h" style="margin-top:18px"><b>' + esc(f.name) + ' · 地 点</b>'
-        + '<em>' + f.places.length + ' Places</em><s></s></div>';
+        + '<em>' + esc(meta.length ? meta.join(' · ') : (f.places.length + ' Places')) + '</em><s></s></div>';
       out += renderPlaces();
       out += renderProfile();
     }

@@ -632,6 +632,47 @@
           }
         }
       }
+
+      /**
+       * 势力体量概览。
+       *
+       * 外交页的卡片原来只有「名字 + 地点数」，看不出这是个帝国还是城邦。
+       * 这里按世界书里**真实存在**的东西数一遍，不猜。
+       * 必须放在 duchies / region / capital 都算完之后，否则公国数永远是 0。
+       */
+      var nRegion = 0;
+      var nCapital = 0;
+      var nChild = 0;
+      var nCity = 0;
+      for (var vi = 0; vi < fac.places.length; vi += 1) {
+        var vp = fac.places[vi];
+        if (vp.region) nRegion += 1;
+        else if (vp.capital) nCapital += 1;
+        else if (vp.parent) nChild += 1;
+        else nCity += 1;
+      }
+      var nDuchy = duchies.length;
+      fac.size = {
+        duchies: nDuchy,
+        regions: nRegion,
+        capitals: nCapital,
+        cities: nCity,
+        districts: nChild,
+        places: fac.places.length,
+        overviews: fac.overview.length,
+      };
+      // 有公国就先说公国 —— 这才是「国家大块」
+      var bits = [];
+      if (nDuchy) {
+        bits.push(nDuchy + ' 公国');
+        if (nCity) bits.push(nCity + ' 城');
+      } else if (nCity) {
+        bits.push(nCity + ' 城');
+      }
+      if (nRegion) bits.push(nRegion + ' 疆域');
+      if (nChild) bits.push(nChild + ' 城区');
+      fac.kind = bits.length ? bits.join(' · ')
+        : (fac.places.length ? '只有地点条目' : '只有总述');
     }
 
     return factions;

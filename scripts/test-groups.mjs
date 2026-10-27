@@ -183,5 +183,52 @@ console.log('\n=== 8. 有公国的势力，渲染出来是三层 ===');
   }
 }
 
+console.log('\n=== 9. 势力体量（卡片上要能看出国家大块）===');
+{
+  for (const k of Object.keys(tree)) {
+    const f = tree[k];
+    ok(k + ' 有 size', !!f.size);
+    ok(k + ' 有 kind 副标题', typeof f.kind === 'string' && f.kind.length > 0, String(f.kind));
+  }
+  const ng = tree['诺斯加德联盟'];
+  console.log('  诺斯加德联盟: ' + ng.kind);
+  console.log('    ' + JSON.stringify(ng.size));
+  ok('公国数是 6', ng.size.duchies === 6, String(ng.size.duchies));
+  ok('疆域数是 6', ng.size.regions === 6, String(ng.size.regions));
+  ok('kind 里写了公国', /6 公国/.test(ng.kind), ng.kind);
+  ok('kind 里写了疆域', /疆域/.test(ng.kind), ng.kind);
+
+  // 没有公国的势力不该凭空多出公国
+  const sl = tree['索伦蒂斯王国'];
+  ok('索伦蒂斯没有公国', !sl.size.duchies, String(sl.size.duchies));
+  ok('索伦蒂斯 kind 里没有「公国」', !/公国/.test(sl.kind), sl.kind);
+
+  // 只有总述的势力
+  const yy = tree['永夜盟约'];
+  ok('永夜盟约 kind 是「只有总述」', yy.kind === '只有总述', yy.kind);
+  ok('永夜盟约 size.cities 是 0', yy.size.cities === 0, String(yy.size.cities));
+}
+
+console.log('\n=== 10. 体量统计排在 duchies/region 标注之后 ===');
+{
+  const src = fs.readFileSync(path.join(ROOT, 'modules/worldbook.js'), 'utf8');
+  const iDuchy = src.indexOf('fac.duchies = duchies;');
+  const iRegion = src.indexOf('rp.region = true;');
+  const iSize = src.indexOf('fac.size = {');
+  ok('能找到三处', iDuchy > 0 && iRegion > 0 && iSize > 0);
+  ok('size 在 duchies 之后', iSize > iDuchy, iDuchy + ' vs ' + iSize);
+  ok('size 在 region 标注之后', iSize > iRegion, iRegion + ' vs ' + iSize);
+}
+
+console.log('\n=== 11. 卡片渲染出体量 ===');
+{
+  const src = fs.readFileSync(path.join(ROOT, 'modules/diplo.ui.js'), 'utf8');
+  ok('renderFactions 用了 f.size', /var sz = f\.size \|\| \{\}/.test(src));
+  ok('主体数字加粗', /'<b>' \+ esc\(big\) \+ '<\/b>'/.test(src));
+  ok('有公国的写公国', /if \(sz\.duchies\) big = sz\.duchies \+ ' 公国'/.test(src));
+  ok('没公国的写城', /else if \(sz\.cities\) big = sz\.cities \+ ' 城'/.test(src));
+  ok('详情标题也带体量', /meta\.push\(sz2\.duchies \+ ' 公国'\)/.test(src));
+}
+
 console.log('\n' + (fail ? fail + ' 项失败' : '全部通过 ✔') + '  ' + pass + ' 项');
 process.exit(fail ? 1 : 0);

@@ -94,12 +94,24 @@
 }
 
 .fl-dw-cnt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 8px;
   margin-top: 7px;
   padding-top: 6px;
   border-top: 1px dashed rgba(212, 175, 90, .16);
   font-size: 10px;
   letter-spacing: .08em;
   color: rgba(212, 175, 90, .74);
+}
+
+/* 主体那一个数字（公国数 / 城数）放大一点，一眼能看出体量 */
+.fl-dw-cnt b {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  color: var(--fl-accent);
 }
 
 .fl-dw-cnt i {
