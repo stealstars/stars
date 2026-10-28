@@ -2410,6 +2410,30 @@
 .fl-arch-bar b { color: var(--fl-accent); font-weight: 600; letter-spacing: .04em; }
 .fl-arch-bar:hover { color: var(--fl-ink); border-color: rgba(212, 175, 90, .45); }
 
+/* ---- 聊天内入口按钮 ---- */
+.fl-entry {
+  display: flex;
+  justify-content: flex-end;
+  margin: 6px 0 0;
+}
+.fl-entry-btn {
+  font: inherit;
+  font-size: 11.5px;
+  letter-spacing: .06em;
+  padding: 5px 13px;
+  border-radius: 14px;
+  cursor: pointer;
+  color: var(--fl-accent);
+  border: 1px solid rgba(var(--fl-accent-rgb), .45);
+  background: rgba(var(--fl-accent-rgb), .10);
+  transition: background .15s, border-color .15s;
+}
+.fl-entry-btn:hover {
+  background: rgba(var(--fl-accent-rgb), .20);
+  border-color: rgba(var(--fl-accent-rgb), .7);
+}
+.fl-entry-btn:active { transform: scale(.97); }
+
 /* ---- 政体 ---- */
 .fl-gov-cur {
   display: flex;
@@ -3991,6 +4015,8 @@
       screen.style.transform = 'none';
       screen.style.pointerEvents = 'auto';
       rescan(false, '打开面板');
+      // 顺带补一遍聊天里的入口按钮：有些消息是在监听装好之前就加载进来的
+      scanMessages();
       setTimeout(showSelfCheck, 500);
     } catch (err) {
       reportError('open', err);
@@ -5154,6 +5180,68 @@
     });
   }
 
+  /* ------------------------------------------------------ 聊天内入口按钮 */
+  /**
+   * 让玩家在聊天里点开面板。
+   *
+   * 起因：想用正则干这件事做不到——Replace With 只产出字符串，
+   * 而 innerHTML 插入的 <script> 按规范不会执行，正则没有 DOM 执行权。
+   * 所以按钮只能由脚本自己挂。
+   *
+   * 做法：消息正文里出现 [领地档案] 时，在这条消息下面补一个按钮。
+   * 标记本身留在正文里不删（正则也匹配得到，玩家看得见）。
+   * 用 data 属性去重，反复扫描不会挂两遍。
+   */
+  const ENTRY_MARK = '[领地档案]';
+  let entryScanning = false;
+
+  /** 一条消息里有没有标记 */
+  function hasEntryMark(text) {
+    return String(text == null ? '' : text).indexOf(ENTRY_MARK) >= 0;
+  }
+
+  /** 给一条消息挂按钮；已经挂过就跳过 */
+  function decorateMessage(mesEl) {
+    if (!mesEl || mesEl.nodeType !== 1) return;
+    if (mesEl.getAttribute('data-fl-entry') === '1') return;
+    const body = mesEl.querySelector('.mes_text');
+    if (!body) return;
+    if (!hasEntryMark(body.textContent)) return;
+
+    mesEl.setAttribute('data-fl-entry', '1');
+    const bar = doc.createElement('div');
+    bar.className = 'fl-entry';
+    const btn = doc.createElement('button');
+    btn.type = 'button';
+    btn.className = 'fl-entry-btn';
+    btn.textContent = '打开领地档案';
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      open();
+    });
+    bar.appendChild(btn);
+    // 挂在正文后面，跟着这条消息走
+    try { body.parentNode.insertBefore(bar, body.nextSibling); } catch (err) {
+      try { mesEl.appendChild(bar); } catch (e2) { /* 忽略 */ }
+    }
+  }
+
+  /** 扫一遍聊天，把带标记的消息都补上按钮 */
+  function scanMessages() {
+    if (entryScanning) return;
+    entryScanning = true;
+    try {
+      const chatEl = doc.querySelector('#chat');
+      if (!chatEl) return;
+      chatEl.querySelectorAll('.mes').forEach(decorateMessage);
+    } catch (e) {
+      /* 忽略 */
+    } finally {
+      entryScanning = false;
+    }
+  }
+
   function historyHtml(d) {
     // 政体块永远在：这是玩家要能随时看、随时换的东西，跟有没有流水无关
     let html = govHtml(d);
@@ -5602,7 +5690,10 @@
     const chat = doc.querySelector('#chat');
     const MO = host.MutationObserver || window.MutationObserver;
     if (!chat || typeof MO !== 'function') return;
-    observer = new MO(() => schedule('event'));
+    observer = new MO(() => {
+      schedule('event');
+      scanMessages();
+    });
     try { observer.observe(chat, { childList: true, subtree: true, characterData: true }); } catch (e) { /* 忽略 */ }
   }
 
@@ -5612,6 +5703,8 @@
     installHooks();
     installEvents();
     installObserver();
+    // 开关打开时，已经存在的消息也要补按钮
+    scanMessages();
     lastVarSig = varSignature();
     lastMsgSig = messageSignature();
     heartbeat = setInterval(() => checkOnce(false), 1200);
@@ -5765,8 +5858,12 @@
       hide: (domain, name) => hideItem(domain, name),
       unhide: (domain, name) => unhideItem(domain, name),
       purge: (domain, name) => purgeItem(domain, name),
+      /* 聊天内入口按钮 */
+      scanMessages: () => scanMessages(),
+      open: () => open(),
     },
     _pure: {
+      ENTRY_MARK, hasEntryMark,
       parseTags, tagsText, effectText, normalizeInner, extractPatchArrays, pointerSegs,
       patchesFromMessage, buildInfoFromMessage, buildHistory, replayState, resolveState,
       parseDomainBlock, latestDomainBlocks, parseBuildBlock, parseReportBlock,
