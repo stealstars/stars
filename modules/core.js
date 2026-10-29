@@ -4668,18 +4668,51 @@
   }
 
   /* ------------------------------------------------------------ 规划 */
-  function plansHtml() {
-    const plans = data.plans || [];
+  /**
+   * 规划页只显示「已经选定的」。
+   *
+   * <fief_build> 是菜单，不是已建。它由正则渲染成多选界面（22KB HTML），
+   * 玩家点「动工」后正则把【动工】xx 回填输入框，
+   * AI 再用 <UpdateVariable> 写成内部资产，状态: 建设中。
+   *
+   * 所以「已选」的唯一判据是内部资产里有没有这个同名项，
+   * 而不是 <fief_build> 里列了什么。
+   */
+  function chosenPlans(d) {
+    const plans = (d && d.plans) || data.plans || [];
+    if (!plans.length) return [];
+    // 领地里的建筑，按名字建索引
+    const byName = {};
+    for (const it of (d && d.items) || []) {
+      if (it && it.name) byName[it.name] = it;
+    }
+    const out = [];
+    for (const p of plans) {
+      const hit = byName[p.名];
+      if (!hit) continue;            // 菜单里没选的那部分，直接不显示
+      out.push(Object.assign({}, p, {
+        状态: hit.status || hit.状态 || '',
+        实况: hit,
+      }));
+    }
+    return out;
+  }
+
+  function plansHtml(d) {
+    const plans = chosenPlans(d);
     if (!plans.length) {
-      return `<div class="fl-empty"><b>◇</b>没有建设方案
-        <small>&lt;fief_build&gt; 区块出现时才有；资源点是天生的，不进规划清单</small></div>`;
+      return `<div class="fl-empty"><b>◇</b>还没有选定工程
+        <small>在聊天里的建设界面选中项目、点「动工」之后，这里才会出现</small>
+        <small>没选的那些是菜单，不占这里的位置</small></div>`;
     }
     let html = `<div class="fl-chipbar" style="margin-bottom:16px">
-      <span class="fl-tag">选定后由 &lt;UpdateVariable&gt; 写入内部资产</span>
+      <span class="fl-tag">已选定</span>
       <span class="fl-tag gold">共 ${plans.length} 项</span>
     </div><div class="fl-cards">`;
     for (const p of plans) {
-      html += `<div class="fl-card" data-cat="${esc(p.类别)}" style="cursor:default">
+      const bs = bucketOf(p.状态);
+      const cls = bs === '运营中' ? 'st-ok' : bs === '建设中' ? 'st-build' : bs === '损毁' ? 'st-bad' : 'st-plan';
+      html += `<div class="fl-card" data-cat="${esc(p.类别)}" data-k="${esc((d && d.name) || '')}::${esc(p.名)}" style="cursor:pointer">
         <div class="fl-card-t">
           <span class="fl-ic">${iconOf(p.类别)}</span>
           <span class="fl-card-n">${esc(p.名)}</span>
@@ -4687,7 +4720,7 @@
         <div class="fl-card-m">
           ${p.编号 ? `<span class="fl-tag gold">${esc(p.编号)}</span>` : ''}
           <span class="fl-tag">${esc(p.类别)}</span>
-          ${p.品质 ? `<span class="fl-tag">${esc(p.品质)}</span>` : ''}
+          ${p.状态 ? `<span class="fl-pill ${cls}">${esc(bucketOf(p.状态))}</span>` : ''}
         </div>
         ${p.说明 ? `<div class="fl-card-d" style="max-height:5.2em">${esc(p.说明)}</div>` : ''}
         <div class="fl-card-o"><b>${esc(p.估价 || '—')}</b><span>${esc(p.工期 || '工期未定')}</span></div>
@@ -4762,7 +4795,7 @@
     else if (tab === '军政') viewEl.innerHTML = militaryHtml(d);
     else if (tab === '资源') viewEl.innerHTML = resourcesHtml(d);
     else if (tab === '账本') viewEl.innerHTML = ledgerHtml(d);
-    else viewEl.innerHTML = plansHtml();
+    else viewEl.innerHTML = plansHtml(d);
 
     bindView(d);
   }
