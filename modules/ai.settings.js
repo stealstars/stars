@@ -56,7 +56,10 @@
           return `<option value="${escFn(m.id)}"${c.model === m.id ? ' selected' : ''}>${escFn(label)}</option>`;
         })
       ).join('')
-      : `<option value="">${c.model ? escFn(c.model) + '（未拉取列表）' : '— 先点「拉取列表」 —'}</option>`;
+      : `<option value="">${c.model ? escFn(c.model) + '（未拉取列表）' : '— 没拉列表就在下面「自定义模型名」里填 —'}</option>`;
+
+    // 手填框只显示"列表里没有的"模型名；列表里能选中的不在这里重复显示
+    const manualVal = models.some((m) => m.id === c.model) ? '' : (c.model || '');
 
     // 拉取后的分布摘要：一眼看出有几个能立刻用
     let distHtml = '';
@@ -112,7 +115,7 @@
         <div class="fl-aic-h">填写地址和密钥后拉取列表，再从中选择。</div>
         <div class="fl-aic-row">
           <div class="fl-aic-selwrap">
-            <select class="fl-aic-sel" id="fl-aic-model"${models.length ? '' : ' disabled'}>${modelOpts}</select>
+            <select class="fl-aic-sel" id="fl-aic-model">${modelOpts}</select>
             <i class="fl-aic-caret">▾</i>
           </div>
         </div>
@@ -120,6 +123,17 @@
           <span class="fl-aic-spin${busy === 'pull' ? ' on' : ''}">↻</span> ${busy === 'pull' ? '正在拉取…' : '拉取列表'}
         </button>
         ${distHtml}
+      </div>
+
+      <div class="fl-aic-f">
+        <label class="fl-aic-l">自定义模型名</label>
+        <div class="fl-aic-h">拉不到列表、或者列表里没有你要的，直接在这里填模型名；填了就以它为准。</div>
+        <div class="fl-aic-row">
+          <div class="fl-aic-selwrap">
+            <input class="fl-aic-in" id="fl-aic-model-manual" type="text" spellcheck="false" autocomplete="off"
+              placeholder="例如 deepseek-chat / gpt-4o-mini" value="${escFn(manualVal)}" style="padding-right:12px">
+          </div>
+        </div>
       </div>
 
       <div class="fl-aic-f">
@@ -172,6 +186,18 @@
 
     const baseI = q('#fl-aic-base');
     const keyI = q('#fl-aic-key');
+    const sel = q('#fl-aic-model');
+    const man = q('#fl-aic-model-manual');
+
+    /**
+     * 当前该用的模型名。手填框优先——它是拉不到列表时唯一的入口。
+     * 两边都空就沿用已存的，不要因为切页把设置清掉。
+     */
+    function modelValue() {
+      if (man && man.value.trim()) return man.value.trim();
+      if (sel && sel.value) return sel.value;
+      return conf().model;
+    }
 
     /**
      * 落盘。
@@ -184,7 +210,7 @@
       const next = {
         base: baseI ? baseI.value : c.base,
         key: keyI ? keyI.value : c.key,
-        model: c.model,
+        model: modelValue(),
       };
       const saved = ai().setConf(cur, next);
       // 回读一次，确认真写进去了
@@ -222,12 +248,24 @@
       });
     });
 
-    const sel = q('#fl-aic-model');
     if (sel) sel.addEventListener('change', () => {
       const c = conf();
-      ai().setConf(cur, { base: c.base, key: c.key, model: sel.value });
+      // 下拉选中就清空手填框——两边同时有值容易搞不清用了哪个
+      if (man && sel.value) man.value = '';
+      ai().setConf(cur, { base: c.base, key: c.key, model: sel.value || c.model });
       repaint(root);
     });
+
+    if (man) {
+      man.addEventListener('input', () => {
+        const c = conf();
+        const v = man.value.trim();
+        // 手填了就把下拉退回占位，选中的模型以手填为准
+        if (v && sel) sel.value = '';
+        ai().setConf(cur, { base: c.base, key: c.key, model: v || (sel ? sel.value : '') });
+      });
+      man.addEventListener('blur', () => repaint(root));
+    }
 
     const pull = q('#fl-aic-pull');
     if (pull) pull.addEventListener('click', async () => {
@@ -261,11 +299,17 @@
     const test = q('#fl-aic-test');
     if (test) test.addEventListener('click', async () => {
       const c = conf();
+      const m = modelValue();
       ai().setConf(cur, {
         base: baseI ? baseI.value : c.base,
         key: keyI ? keyI.value : c.key,
-        model: sel && sel.value ? sel.value : c.model,
+        model: m,
       });
+      if (!m) {
+        err = '还没填模型名，手填框或下拉里选一个。';
+        repaint(root);
+        return;
+      }
       busy = 'test'; err = ''; repaint(root);
       try {
         const r = await ai().testWith({});

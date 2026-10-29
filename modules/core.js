@@ -4678,22 +4678,36 @@
    * 所以「已选」的唯一判据是内部资产里有没有这个同名项，
    * 而不是 <fief_build> 里列了什么。
    */
+  /**
+   * 规划页 = 内部资产里**已经存在**的工程，不是菜单。
+   *
+   * <fief_build> 是候选清单，每次 AI 输出都会换一批。以前拿"最新一条菜单"
+   * 去和内部资产求交集，结果菜单没列到的已建成建筑整批消失——建得越多，
+   * 反而越容易看到空页面。现在反过来：内部资产说话，菜单只用来补
+   * 估价/工期/说明（buildInfoAll 已经合过全部历史消息）。
+   */
   function chosenPlans(d) {
-    const plans = (d && d.plans) || data.plans || [];
-    if (!plans.length) return [];
-    // 领地里的建筑，按名字建索引
-    const byName = {};
-    for (const it of (d && d.items) || []) {
-      if (it && it.name) byName[it.name] = it;
-    }
+    const items = (d && d.items) || [];
+    if (!items.length) return [];
+    // 菜单只用来补估价/工期/说明；buildInfoAll 已合并全部历史消息的 <fief_build>
+    const info = buildInfoAll();
     const out = [];
-    for (const p of plans) {
-      const hit = byName[p.名];
-      if (!hit) continue;            // 菜单里没选的那部分，直接不显示
-      out.push(Object.assign({}, p, {
-        状态: hit.status || hit.状态 || '',
-        实况: hit,
-      }));
+    for (const it of items) {
+      if (!it || !it.name) continue;
+      // 资源点是地里长的，不是工程，不进规划页
+      if (/资源点/.test(String(it.category || ''))) continue;
+      const p = info[it.name] || {};
+      out.push({
+        名: it.name,
+        编号: '',
+        类别: it.category || p.类别 || '',
+        品质: it.quality || '',
+        估价: p.估价 || it.cost || '',
+        工期: p.工期 || it.span || '',
+        说明: p.说明 || it.brief || '',
+        状态: it.status || '',
+        实况: it,
+      });
     }
     return out;
   }
@@ -4701,12 +4715,12 @@
   function plansHtml(d) {
     const plans = chosenPlans(d);
     if (!plans.length) {
-      return `<div class="fl-empty"><b>◇</b>还没有选定工程
+      return `<div class="fl-empty"><b>◇</b>这块领地还没有工程
         <small>在聊天里的建设界面选中项目、点「动工」之后，这里才会出现</small>
-        <small>没选的那些是菜单，不占这里的位置</small></div>`;
+        <small>界面里没选的那些只是菜单，不算已建</small></div>`;
     }
     let html = `<div class="fl-chipbar" style="margin-bottom:16px">
-      <span class="fl-tag">已选定</span>
+      <span class="fl-tag">已建成／在建</span>
       <span class="fl-tag gold">共 ${plans.length} 项</span>
     </div><div class="fl-cards">`;
     for (const p of plans) {
