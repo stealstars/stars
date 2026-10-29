@@ -2326,6 +2326,8 @@
   .fl-metric .fl-meter s { display: block; height: 100%; text-decoration: none; background: linear-gradient(90deg, rgba(var(--fl-accent-rgb),0.55), var(--fl-accent)); }
   .fl-metric .fl-meter.good s { background: linear-gradient(90deg, rgba(143,191,122,0.5), var(--fl-ok)); }
   .fl-metric .fl-meter.bad s { background: linear-gradient(90deg, rgba(212,127,108,0.5), var(--fl-bad)); }
+  /* 人口不是 0~100 的刻度，画进度条会让人以为是"填充度"，改用一行小字 */
+  .fl-metric .fl-metric-note { margin-top: 9px; font-size: 10px; line-height: 2px; color: var(--fl-dimmer); letter-spacing: .5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .fl-pips { display: flex; gap: 4px; }
   .fl-box .fl-pips { max-width: 190px; }
   .fl-metric .fl-pips { margin-top: 9px; gap: 3px; }
@@ -4229,7 +4231,7 @@
       `<div class="fl-metric"><i>治 安</i><b>${q == null ? esc(g.治安 || '—') : q + '<u>/100</u>'}</b>${meterHtml(q, qCls)}</div>`,
       `<div class="fl-metric"><i>民 心</i><b>${m == null ? esc(g.民心 || '—') : m + '<u>/100</u>'}</b>${meterHtml(m, mCls)}</div>`,
       `<div class="fl-metric"><i>物 资</i><b>${esc(stock.name)}</b><div class="fl-pips ${pipCls}">${pips}</div></div>`,
-      `<div class="fl-metric"><i>人 口</i><b>${esc(g.人口 || '—')}</b><div class="fl-meter"><s style="width:${d.tier ? d.tier.n * 13 : 8}%;opacity:.55"></s></div></div>`,
+      `<div class="fl-metric"><i>人 口</i><b>${esc(g.人口 || '—')}</b><div class="fl-metric-note">实况人数，与档位无关</div></div>`,
       `<div class="fl-metric"><i>金 库</i><b title="${g.金库 == null ? '' : fmtNum(g.金库) + ' ' + esc(g.货币 || '')}">${g.金库 == null ? '—' : fmtCompact(g.金库)}<small class="fl-cur">${esc(g.货币 || '')}</small></b></div>`,
       `<div class="fl-metric"><i>军 事</i><b title="${troops ? fmtNum(troops) + ' 人' : ''}">${troops ? fmtCompact(troops) : '—'}<small>${troops ? ' 人' : ''}</small></b></div>`,
     ];
