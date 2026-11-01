@@ -826,6 +826,17 @@
     return out;
   }
 
+  /** 6合1 在人口后面接了领地状态：`人口17人→开荒中`。取箭头之后那段。 */
+  function landStateOf(asset) {
+    const desc = String((asset && asset.描述) || '');
+    const head = splitBy(desc, ['\n'])[0] || '';
+    const m = head.match(/[→⇒]|->/);
+    if (!m) return '';
+    const tail = head.slice(head.indexOf(m[0]) + m[0].length).trim();
+    const v = tail.split(/[｜|]/)[0].trim();
+    return /^(未开发|开荒中|和平|动荡|围城)$/.test(v) ? v : '';
+  }
+
   /** 领地描述首行的「治理: 治安78｜民心65｜商路稳定｜仓储50｜丁口数百户」 */
   function parseGovernance(asset) {
     const desc = String((asset && asset.描述) || '');
@@ -846,6 +857,10 @@
         let val = text;
         for (const kw of pair[1]) val = val.split(kw).join('');
         val = val.split(':').join('').split('：').join('').trim();
+        /* 6合1 把领地状态接在人口后面：人口17人→开荒中。
+           箭头之后是状态，不是人口，切掉再存，否则面板会显示「17人→开荒中」。 */
+        const arrow = val.search(/→|->|⇒/);
+        if (arrow > 0) val = val.slice(0, arrow).trim();
         if (!out[name]) out[name] = val;
         break;
       }
@@ -4169,7 +4184,7 @@
     if (q) out.push(['品质 ' + q, '']);
     const mode = meta.治理模式 || info.治理模式;
     if (mode) out.push(['治理 ' + mode, 'green']);
-    const st = meta.领地状态 || info.状态;
+    const st = meta.领地状态 || info.状态 || landStateOf((d && d.asset) || {});
     if (st) out.push(['状态 ' + st, '']);
     if (meta.拥有者) out.push(['拥有者 ' + meta.拥有者, '']);
     if (info.治下 && info.治下.副) out.push(['副手 ' + info.治下.副, '']);
