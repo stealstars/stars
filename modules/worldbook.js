@@ -205,12 +205,17 @@
   /**
    * 把 [本体][势力][势力名][子标签…]名字 拆开。
    * 不假设子标签叫什么——命定以后加新标签也能接住。
+   *
+   * 第一个方括号也不写死「本体」：DLC 常见 `[DLC][势力][新势力]xxx`，
+   * 写死 `^\[本体\]` 会把整本 DLC 一条不剩地丢掉。
+   * 现在认任何「[X][势力][名字]」形式，X 是什么都行。
    */
   function splitFactionTag(comment) {
-    var m = String(comment || '').match(/^\[本体\]\[势力\]\[([^\]]+)\]([\s\S]*)$/);
+    var m = String(comment || '').match(/^\[([^\]]+)\]\[势力\]\[([^\]]+)\]([\s\S]*)$/);
     if (!m) return null;
-    var faction = m[1];
-    var rest = m[2] || '';
+    var source = m[1];        // 本体 / DLC / 扩展 / 随便什么
+    var faction = m[2];
+    var rest = m[3] || '';
     var tags = [];
     var tm;
     var re = /^\[([^\]]+)\]/;
@@ -504,7 +509,7 @@
      *   [诺斯加德联盟][城镇]林歌城          ← 「城镇」是类型
      * 当成父级会造出一堆指向不存在条目的孤儿。
      */
-    var TYPE_TAG = /^(地块|城镇|城市|村落|村庄|乡镇|要塞|港口|军港|圣所|大型城市|中型城镇|小型村镇|超级城市|小国|行省|帝国行省|势力|本体|地点|地标|城区|区域|聚落|营地|关隘|遗迹|胜景|建筑|设施|分割线|节庆|事件|人物|角色|组织|制度|传说|派系|经济|军事|文化|地理|历史)$/;
+    var TYPE_TAG = /^(地块|城镇|城市|村落|村庄|乡镇|要塞|港口|军港|圣所|大型城市|中型城镇|小型村镇|超级城市|小国|行省|帝国行省|势力|本体|DLC|地点|地标|城区|区域|聚落|营地|关隘|遗迹|胜景|建筑|设施|分割线|节庆|事件|人物|角色|组织|制度|传说|派系|经济|军事|文化|地理|历史|王国|帝国|公国|侯国|伯国|大公国|自治领|殖民地|城邦|联邦|联盟|部落|氏族|郡|州|省|县)$/;
 
     /**
      * 行省 → 下辖城镇。
@@ -518,28 +523,64 @@
      *   特色城镇: 翠庭城(省会)|渡鸦港
      * 所以先扫一遍所有条目把这个字段收集起来，循环里再反查。
      */
-    var townOfProvince = {};   // 城镇名 → 省名
-    var provinceOf = {};       // 势力名 → 该势力下的省名集合
+    var townOfProvince = {};   // 子项名 → 上级名
     var placeNames = {};       // 所有势力下的条目名，用于「名字前缀」认亲
     (function mapProvinces() {
+      /**
+       * 谁能当「上级」：地名后缀里含行政/地理区划词就算。
+       * 不写死「省」——DLC 可能用州/郡/道/大区/领地/辖区/公国/王领，
+       * 甚至「XX行省」「XX特别市」这种。
+       */
+      var PARENT_SUFFIX = /(省|州|郡|道|府|大区|行省|领地|辖区|公国|王国|王领|总督区|自治区|特区|地区|地块|区域|群岛|半岛|平原|盆地|高原|山脉|森林|草原|沙漠|海岸|海|湾)$/;
+
+      /**
+       * 哪些字段在说「我下面有哪些城」。
+       * 原来只认「特色城镇」，那是这一版世界书的写法；
+       * 换成别的词就一条都认不出来，等于白扫。
+       */
+      var CHILD_FIELDS = [
+        '特色城镇', '主要城镇', '下辖城镇', '所属城镇', '城镇列表', '城镇',
+        '主要城市', '下辖城市', '所属城市', '城市列表', '城市',
+        '治下城镇', '治下城市', '辖下', '下辖', '包含城镇', '包含城市',
+        '重要地点', '主要地点', '下辖地点', '附属城镇', '附属城市',
+        '首府', '省会', '治所',
+      ];
+
+      var splitTowns = function (raw) {
+        return String(raw || '')
+          .split(/[|｜、,，;；\/]/)
+          .map(function (x) { return String(x).replace(/[（(][^）)]*[）)]/g, '').trim(); })
+          .filter(function (x) { return !!x && x.length <= 24; });
+      };
+
       for (var pi = 0; pi < entries.length; pi += 1) {
         var pe = entries[pi];
         var psp = splitFactionTag(pe.comment);
         if (!psp || !psp.name) continue;
         placeNames[psp.name] = true;
-        if (!/(省|郡|州|道|行省)$/.test(psp.name)) continue;
-        var m = String(pe.content || '').match(/特色城镇\s*[:：]\s*([^\n]+)/);
-        if (!m) continue;
-        var parts = m[1].split(/[|｜、,，]/);
-        for (var ti2 = 0; ti2 < parts.length; ti2 += 1) {
-          // 「翠庭城(省会)」→「翠庭城」
-          var town = String(parts[ti2] || '').replace(/[（(][^）)]*[）)]/g, '').trim();
-          if (!town) continue;
-          if (!townOfProvince[town]) townOfProvince[town] = psp.name;
+      }
+
+      for (var pj = 0; pj < entries.length; pj += 1) {
+        var pe2 = entries[pj];
+        var psp2 = splitFactionTag(pe2.comment);
+        if (!psp2 || !psp2.name) continue;
+        if (!PARENT_SUFFIX.test(psp2.name)) continue;
+
+        var body = String(pe2.content || '');
+        for (var ci = 0; ci < CHILD_FIELDS.length; ci += 1) {
+          var fld = CHILD_FIELDS[ci];
+          var re = new RegExp('(?:^|[\\s|｜])' + fld + '\\s*[:：]\\s*([^\\n]+)', 'm');
+          var mm = body.match(re);
+          if (!mm) continue;
+          var towns = splitTowns(mm[1]);
+          for (var ti = 0; ti < towns.length; ti += 1) {
+            var t = towns[ti];
+            // 只认确实有独立条目的名字；纯文字提及的不连，避免挂错
+            if (!placeNames[t]) continue;
+            if (t === psp2.name) continue;
+            if (!townOfProvince[t]) townOfProvince[t] = psp2.name;
+          }
         }
-        provinceOf[psp.name] = psp.faction;
-        if (!provinceOf[psp.faction]) provinceOf[psp.faction] = {};
-        provinceOf[psp.faction][psp.name] = true;
       }
     })();
 
@@ -597,8 +638,11 @@
        * 层级：条目名里的方括号是有顺序的。
        *   [本体][势力][兽族联盟][鼠族王国][风信子城][皇城区]枢机厅
        *                    faction        tags[0]   tags[1]  tags[2]  name
-       * 从右往左看 tags，第一个不是子势力的，就是直接上级地点。
-       * 「鼠族王国」这类是子势力（下面还会再出现地点），跳过。
+       * 从右往左看 tags，第一个不是类型标签的，就是直接上级地点。
+       *
+       * 子势力（鼠族王国、蝾螈王朝）**照样能当父级**——它下面挂着风信子城。
+       * 以前这里遇到子势力就 continue，结果风信子城整棵子树变成孤儿。
+       * 真正要跳过的只有「类型标签」和「自己」。
        */
       var parent = '';
       for (var ti = sp.tags.length - 1; ti >= 0; ti -= 1) {
@@ -609,8 +653,6 @@
         if (TYPE_TAG.test(tk)) continue;
         // 自指：条目名和 tag 一样（[风信子城]风信子城），那是重复标注，跳过
         if (tk === sp.name) continue;
-        // 子势力名：本势力下所有条目都带这个 tag，且它本身也是势力条目
-        if (SUB_FACTION && SUB_FACTION(tk)) continue;
         parent = tk;
         break;
       }

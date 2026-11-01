@@ -409,6 +409,21 @@
     var i;
     for (i = 0; i < f.places.length; i += 1) byName[f.places[i].name] = f.places[i];
 
+    /**
+     * overview 里的条目也要能当父级。
+     *
+     * 「鼠族王国」这种子势力没有「规模」字段，扫描时进了 overview，
+     * 但风信子城的 parent 指着它。只在 places 里找的话，整棵子树
+     * 会因为找不到父级而散成孤儿——玩家看到的就是一片平地。
+     * 这里补成「虚拟分组」，只当容器用，点不开也不显示字数。
+     */
+    for (i = 0; i < (f.overview || []).length; i += 1) {
+      var ovn = f.overview[i];
+      if (!ovn || !ovn.name) continue;
+      if (byName[ovn.name]) continue;
+      byName[ovn.name] = { name: ovn.name, group: true, scale: '', where: '', count: 0 };
+    }
+
     // 虚拟分组：原文「主要城市」里写了、但没有独立条目的
     var groups = f.groups || [];
     var ghost = {};
@@ -443,6 +458,20 @@
     for (var gn in ghost) {
       if (!ghost.hasOwnProperty(gn)) continue;
       roots.push(ghost[gn]);
+    }
+
+    /**
+     * overview 容器（鼠族王国这类子势力）也要作为根出现，
+     * 否则它下面的城市挂上去了却没人画得出来。
+     * 只补真正有子项的，没子项的不占位置。
+     */
+    for (var gn2 in kids) {
+      if (!kids.hasOwnProperty(gn2)) continue;
+      if (ghost[gn2]) continue;
+      var cnode = byName[gn2];
+      if (!cnode || !cnode.group) continue;
+      if (cnode.parent) continue;          // 它自己还挂在别处，交给上层画
+      roots.push(cnode);
     }
 
     /**
@@ -599,6 +628,15 @@
       var hit = !p.ghost && cacheGet(f.name, p.name);
       var pad = depth > 0 ? ' style="padding-left:' + (10 + depth * 13) + 'px"' : '';
       var br = depth > 0 ? '<span class="fl-dp-br">└</span>' : '';
+
+      // 容器（鼠族王国这类子势力）：只显示名字和子项数，点不开
+      if (p.group) {
+        out += '<div class="fl-dp-row fl-dp-duchy">'
+          + '<span class="fl-dp-nm">' + esc(p.name) + '</span>'
+          + '<span class="fl-dp-tag" style="opacity:.55">势力</span>'
+          + '</div>';
+        continue;
+      }
 
       // 公国：显示名字 + 首府 + 核心领土，本身点不了
       if (p.duchyNode) {
