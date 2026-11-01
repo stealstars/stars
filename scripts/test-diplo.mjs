@@ -219,7 +219,10 @@ await win.__fiefBook.scan(false);
 const sc = win.__fiefBook.scanSync();
 dip.state.ready = !!(sc && sc.count);
 ok('扫到条目', !!sc && sc.count > 500, sc ? String(sc.count) : 'null');
-ok('拆出势力', !!sc && Object.keys(sc.factions).length === 10, sc ? String(Object.keys(sc.factions).length) : '');
+/* 分组数不是固定的：本体 10 个势力 + 各种 DLC 扩展与冒险区域
+   （[DLC][扩展][边陲之国]… / [本体][冒险区域]…）也算分组。
+   以前写死 === 10，一加 DLC 就红。 */
+ok('拆出势力', !!sc && Object.keys(sc.factions).length >= 10, sc ? String(Object.keys(sc.factions).length) : '');
 console.log('  条目 ' + sc.count + '，势力 ' + Object.keys(sc.factions).length);
 
 console.log('\n=== 邻邦接入（走真实链路）===');

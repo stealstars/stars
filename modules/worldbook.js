@@ -211,21 +211,128 @@
    * 现在认任何「[X][势力][名字]」形式，X 是什么都行。
    */
   function splitFactionTag(comment) {
-    var m = String(comment || '').match(/^\[([^\]]+)\]\[势力\]\[([^\]]+)\]([\s\S]*)$/);
-    if (!m) return null;
-    var source = m[1];        // 本体 / DLC / 扩展 / 随便什么
-    var faction = m[2];
-    var rest = m[3] || '';
+    var c = String(comment || '');
     var tags = [];
+    var rest = '';
+    var source = '';
+    var faction = '';
     var tm;
     var re = /^\[([^\]]+)\]/;
+
+    var m = c.match(/^\[([^\]]+)\]\[势力\]\[([^\]]+)\]([\s\S]*)$/);
+    if (m) {
+      source = m[1];          // 本体 / DLC / 扩展 / 随便什么
+      faction = m[2];
+      rest = m[3] || '';
+    } else {
+      /**
+       * 没有 [势力] 这一层的条目。
+       *
+       * 玩家的原话："你咋把外交页面定死了，比如边陲之国这种dlc就进不去"。
+       *
+       * 边陲之国整套写的是 [DLC][扩展][边陲之国]冒险区域-边陲之国，
+       * 也就是 [来源][扩展][扩展名]条目名 —— 没有势力层。
+       * 原来这里直接 return null，13 条全被丢掉，整本 DLC 在外交页看不见。
+       *
+       * 现在放宽：任何 [X][Y][Z]... 都收，用 Z（或 X）当分组名。
+       * 只排除两类确实不是地点的：
+       *   ① 第二段是「本体」以外的功能标签（角色/事件/变量/设定…）
+       *   ② 第三段本身就是 mvu_update 之类的技术标记
+       * 分组名取「扩展名」优先，没有就用来源段，保证能塞进某个分组里。
+       */
+      var m2 = c.match(/^\[([^\]]+)\]\[([^\]]+)\]\[([^\]]+)\]([\s\S]*)$/);
+
+      /**
+       * 只剩两段的写法：[本体][冒险区域]无尽树海
+       * 方括号后直接跟名字，没有第三段，m2 匹配不到。
+       * 「冒险区域/地点/地标/地块」是真地点，必须接住；
+       * 「种族/变量/事件/角色」这些不是，丢掉。
+       */
+      if (!m2) {
+        var m3 = c.match(/^\[([^\]]+)\]\[(冒险区域|区域|地点|地标|地块|城镇|城市|据点|遗迹)\]([\s\S]*)$/);
+        if (!m3) return null;
+        var nm0 = m3[3].replace(/\s*[（(][^）)]*[）)]\s*$/, '').trim();
+        if (!nm0) return null;
+        /* 分隔线：[本体][冒险区域]➡️冒险区域开始 / ➡️冒险区域结束 */
+        if (/^[➡◀▶←→↓↑▲▼\-—＝=*＊]/.test(nm0)) return null;
+        /* 这类两段写法本身就是「冒险区域」，名字就是地名，
+           不该再走 buildFactionTree 那套 isPlace 推断（那里会把它判成非地点）。 */
+        return {
+          faction: m3[1] + m3[2],
+          tags: [],
+          name: nm0,
+          rawName: m3[3],
+          source: m3[1],
+          forcePlace: true,
+        };
+      }
+
+      var seg1 = m2[1];       // 本体 / DLC
+      var seg2 = m2[2];       // 扩展 / 种族 / 冒险区域 …
+      var seg3 = m2[3];       // 扩展名 / 类型名
+      var tail = m2[4] || '';
+
+      // 明显不是势力/地点的分类，不往外交页塞
+      if (/^(变量|控制|快捷功能|世界设定|额外设定|命定系统|种族|角色|事件|怪物生态|产业)$/.test(seg2)) return null;
+      // 技术标记条目：[DLC][扩展][边陲之国][mvu_update]莉莉变量更新规则
+      if (/mvu_?update|^mvu_/i.test(seg3) || /^\[?mvu_update\]?/i.test(tail.slice(0, 12))) return null;
+
+      /**
+       * [本体][冒险区域][克摩什大陆]克摩什大陆
+       * 第二段是「冒险区域」，第三段是地名，名字还是同一个 —— 混三段写法。
+       * 这不是「扩展名」，别拿它当分组，直接按地名收。
+       */
+      if (/^(冒险区域|区域|地点|地标|地块|城镇|城市|据点|遗迹)$/.test(seg2)) {
+        var nm1 = seg3.replace(/\s*[（(][^）)]*[）)]\s*$/, '').trim();
+        if (!nm1) return null;
+        /* 第三段是地名，但方括号后面可能还有子地点名：
+             [本体][冒险区域][无尽树海]文明哨站    → 父级 无尽树海，条目 文明哨站
+             [本体][冒险区域][无尽树海]无尽树海    → 自述行，父级留空
+           分隔线（➡️开头）不要。 */
+        if (/^[➡◀▶←→↓↑▲▼\-—＝=*＊]/.test(nm1)) return null;
+        var sub = (tail || '').replace(/\s*[（(][^）)]*[）)]\s*$/, '').trim();
+        /* 只有「名字和第三段完全一致」才算这一区自己的总述。
+           以前写成 indexOf(nm1) === 0，结果
+             [无尽树海]无尽树海-无尽地城
+           被当成自述，两条互相覆盖，最后只剩一条。 */
+        var isSelf = !sub || sub === nm1;
+        return {
+          faction: seg1 + seg2,
+          tags: isSelf ? [] : [nm1],
+          name: isSelf ? nm1 : sub,
+          rawName: isSelf ? seg3 : sub,
+          source: seg1,
+          forcePlace: true,
+        };
+      }
+
+      /* 分组名：
+         [DLC][扩展][边陲之国]xxx  → 用「边陲之国」
+         扩展名本身像分类词时退回来源段，免得一堆 DLC 挤进同一个分组 */
+      var group = /^(扩展|DLC|本体|区域|设定|机制|系统|资料)$/.test(seg3) ? (seg1 + seg3) : seg3;
+      source = seg1;
+      faction = group;
+      rest = tail;
+    }
+
     while ((tm = rest.match(re)) !== null) {
       tags.push(tm[1]);
       rest = rest.slice(tm[0].length);
     }
     // 剥掉作者签名 "(快乐柠萌茶)" "(△一串)" 之类
     var name = rest.replace(/\s*[（(][^）)]*[）)]\s*$/, '').trim();
-    return { faction: faction, tags: tags, name: name, rawName: rest };
+
+    /**
+     * 剥掉「纯分类词 + 连字符」前缀。
+     *   [DLC][扩展][边陲之国]冒险区域-边陲之国   → 边陲之国
+     *   [DLC][扩展][边陲之国]外围村落-白教区     → 白教区
+     * 「悲叹之城」「王国都城」这类是**真实地名**，剥了会丢语境，一律保留：
+     *   悲叹之城-迷雾森林   → 原样
+     *   王国都城-地牢       → 原样
+     * 只有明显是分类的词才进这个表，宁可不剥，也不要剥错。
+     */
+    name = name.replace(/^(冒险区域|外围村落|特殊地点|子区域|区域|地点)[-－—_]\s*/, '').trim();
+    return { faction: faction, tags: tags, name: name, rawName: rest, source: source };
   }
 
   /**
@@ -627,12 +734,55 @@
       //   ③ 名字像地名且没有势力字段       → 兜底
       var geoName = GEO_NAME.test(sp.name);
       var byField = geoN > 0 && geoN >= facN;
+
+      /**
+       * 外来扩展（[DLC][扩展][XX]）的额外门槛。
+       *
+       * 玩家的原话："你咋把外交页面定死了，比如边陲之国这种dlc就进不去，
+       * 那别的地方也进不去了"。
+       *
+       * 放宽注释结构后，边陲之国进来了 —— 但跟着进来一堆不是地点的东西：
+       *   [DLC][扩展][种族-山妖]山妖          写体质/寿命/社会/习性
+       *   [DLC][扩展][男娘扮演功能]…          写基础外貌/扮演要求
+       *   [DLC][扩展][命运抽卡]…              写抽卡规则
+       * 它们的共同点是**通篇没有一个地理字段**。
+       *
+       * 所以对这些「非势力」分组，抬高标准：必须真有地理证据
+       * （规模 / 位置 / 环境 / 地理 / 地形 / 概况 之一，且不少于势力字段）。
+       * 本体势力那一套判定完全不动，避免把原本正常的条目判掉。
+       */
+      var isForeign = sp.source && !/^本体$/.test(sp.source);
+      if (isForeign) {
+        /**
+         * 只排除「有专属字段、明显不是地点」的条目。
+         * 不要求必须有地理字段 —— 否则会把
+         *   [DLC][扩展][无尽地城扩展]无尽地城-控制（写层数/区块对照表）
+         * 这种虽不是常规地点、但确实是区域设定的条目也一起打掉。
+         *
+         * 判定依据是「这些字段只有非地点条目才会写」：
+         *   体质/寿命/习性        → 种族
+         *   基础外貌/扮演要求      → 扮演功能
+         *   抽卡/卡池/FG          → 抽卡系统
+         */
+        var bodySign = /(?:^|[\n|｜])\s*(体质|寿命|习性|基础外貌|扮演要求|抽卡|卡池|单次抽卡)/.test(body);
+        if (bodySign) {
+          node.isPlace = false;
+          node.why = 'no-geo';
+        }
+      }
+
       // 名字明确是地理单元（「联盟直辖区」「XX区」「XX公国领地」）——
       // 这类条目常借用势力的字段格式（首府/领土/统治者），但读的人要把它当地点看
       var strongName = /(直辖区|辖区|辖区|区|省|郡|州|领|地块|半岛|群岛|盆地|高原|平原|山脉)$/.test(sp.name);
-      node.isPlace = !byName && !byTag && !bySelf
-        && (!!scale || byField || strongName || (geoName && facN === 0));
-      node.why = scale ? 'scale' : (byField ? 'field' : (strongName ? 'strongname' : (geoName && facN === 0 ? 'name' : '')));
+      if (sp.forcePlace) {
+        /* [本体][冒险区域]无尽树海 这种写法没有势力层，名字就是地名，直接收 */
+        node.isPlace = !byName && !bySelf;
+        node.why = 'forceplace';
+      } else if (node.why !== 'no-geo') {
+        node.isPlace = !byName && !byTag && !bySelf
+          && (!!scale || byField || strongName || (geoName && facN === 0));
+        node.why = scale ? 'scale' : (byField ? 'field' : (strongName ? 'strongname' : (geoName && facN === 0 ? 'name' : '')));
+      }
 
       /**
        * 层级：条目名里的方括号是有顺序的。

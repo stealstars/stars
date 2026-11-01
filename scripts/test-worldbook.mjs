@@ -50,7 +50,14 @@ ok('debug 看到 getWorldbook', d1.有getWorldbook === true);
 
 const c1 = await w1.__fiefBook.scan(false);
 ok('扫到条目', c1.count > 500, String(c1.count));
-ok('拆出 10 个势力', Object.keys(c1.factions).length === 10, String(Object.keys(c1.factions).length));
+/**
+ * 分组数不是固定的：命定本体 10 个势力，加上各种 DLC 扩展
+ * （[DLC][扩展][边陲之国]… / [本体][冒险区域]… ）也是分组。
+ * 早期断言写死 === 10，一加 DLC 就红，改成下限 + 关键势力在不在。
+ */
+ok('拆出多个势力分组', Object.keys(c1.factions).length >= 10, String(Object.keys(c1.factions).length));
+ok('本体势力都在', ['奥古斯提姆帝国', '诺斯加德联盟', '兽族联盟']
+  .every((n) => !!c1.factions[n]));
 ok('scan 当时返回 Promise', typeof toTH(raw).getWorldbook === 'function');
 ok('scanSync 拿到同一批', w1.__fiefBook.scanSync().count === c1.count);
 
@@ -84,7 +91,8 @@ const thOld = {
 const w2 = makeWin(thOld);
 const c2 = await w2.__fiefBook.scan(false);
 ok('同步接口也能扫', c2.count > 500, String(c2.count));
-ok('comment 字段也能读', Object.keys(c2.factions).length === 10, String(Object.keys(c2.factions).length));
+ok('comment 字段也能读', Object.keys(c2.factions).length >= 10, String(Object.keys(c2.factions).length));
+ok('两种接口分组一致', Object.keys(c2.factions).length === Object.keys(c1.factions).length);
 
 /* ---------------- 没有 TavernHelper ---------------- */
 console.log('\n=== 无 TavernHelper ===');
