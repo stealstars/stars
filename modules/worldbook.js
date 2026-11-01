@@ -209,13 +209,40 @@
    * 第一个方括号也不写死「本体」：DLC 常见 `[DLC][势力][新势力]xxx`，
    * 写死 `^\[本体\]` 会把整本 DLC 一条不剩地丢掉。
    * 现在认任何「[X][势力][名字]」形式，X 是什么都行。
+   *
+   * 另外收一种：**[DLC][扩展][扩展名]条目名**。
+   * 玩家的原话："主要是有些dlc不写势力标签啊"。
+   * 边陲之国整套是 [DLC][扩展][边陲之国]王国都城-地牢，没有势力层，
+   * 原来直接 return null，整本 DLC 在外交页看不见。
+   *
+   * 但 [扩展] 是个杂物箱：种族、扮演规则、抽卡系统、经济设定都往里塞，
+   * 光看标签分不出来。所以这里只负责**拆开**，是不是地点交给
+   * buildFactionTree 用「正文有没有地理字段」判定——那是白名单，
+   * 漏网不了。[角色]/[事件] 不是地理内容，这里直接不收。
    */
   function splitFactionTag(comment) {
-    var m = String(comment || '').match(/^\[([^\]]+)\]\[势力\]\[([^\]]+)\]([\s\S]*)$/);
-    if (!m) return null;
-    var source = m[1];        // 本体 / DLC / 扩展 / 随便什么
-    var faction = m[2];
-    var rest = m[3] || '';
+    var c = String(comment || '');
+    var source, faction, rest, isExt = false;
+
+    var m = c.match(/^\[([^\]]+)\]\[势力\]\[([^\]]+)\]([\s\S]*)$/);
+    if (m) {
+      source = m[1];          // 本体 / DLC / 随便什么
+      faction = m[2];
+      rest = m[3] || '';
+    } else {
+      // [DLC][扩展][扩展名]条目名
+      var m2 = c.match(/^\[([^\]]+)\]\[扩展\]\[([^\]]+)\]([\s\S]*)$/);
+      if (!m2) return null;
+      source = String(m2[1]);
+      faction = m2[2];
+      rest = m2[3] || '';
+      isExt = true;
+      // 技术条目： [DLC][扩展][某扩展][mvu_update]xxx
+      if (/^\[?mvu_update\]?/i.test(rest.slice(0, 14))) return null;
+      // 种族名直接写在扩展名里，不用看正文就知道不是地点
+      if (String(m2[2]).indexOf('种族-') === 0) return null;
+    }
+
     var tags = [];
     var tm;
     var re = /^\[([^\]]+)\]/;
@@ -225,7 +252,7 @@
     }
     // 剥掉作者签名 "(快乐柠萌茶)" "(△一串)" 之类
     var name = rest.replace(/\s*[（(][^）)]*[）)]\s*$/, '').trim();
-    return { faction: faction, tags: tags, name: name, rawName: rest };
+    return { faction: faction, tags: tags, name: name, rawName: rest, source: source, isExt: isExt };
   }
 
   /**
@@ -635,6 +662,33 @@
       node.why = scale ? 'scale' : (byField ? 'field' : (strongName ? 'strongname' : (geoName && facN === 0 ? 'name' : '')));
 
       /**
+       * [DLC][扩展] 的额外门槛：**必须有地理字段**。
+       *
+       * 上面那套判定对本体势力够用，但对 [扩展] 太松 ——
+       * [扩展] 是杂物箱，种族/扮演规则/抽卡/经济设定全在里面，
+       * 名字和字段都可能长得像地点。
+       *
+       * 实测这 5 条都不是地点，共同点是一个地理字段都没有：
+       *   [DLC][扩展][种族-山妖]山妖            写体质/寿命/居所/习性
+       *   [DLC][扩展][男娘扮演功能]…            写基础外貌/扮演要求
+       *   [DLC][扩展][命运抽卡]…                写抽卡价格/次数
+       *   [DLC][扩展][汐海妖精]…                写特质/居所
+       *   [DLC][扩展][迷宫经济生态与冒险产业]…  写核心概念
+       * 而真正要收的边陲之国，一条不落全有「位置:」「环境:」。
+       *
+       * 所以这里收紧成白名单：地理字段一个都没有的，直接不算地点。
+       * 宁可漏，不可乱 —— 上一版用黑名单（体质/寿命/抽卡）过滤，
+       * 卡里没写到的形态全漏进外交页，34 个分组把人看崩了。
+       */
+      if (sp.isExt) {
+        var geoStrict = /(?:^|[\n|｜>])\s*(位置|地点|环境|地理|地形|地貌|气候|生态|行政区划|区域划分|标识)\s*[:：]/.test(body);
+        if (!geoStrict) {
+          node.isPlace = false;
+          node.why = 'ext-no-geo';
+        }
+      }
+
+      /**
        * 层级：条目名里的方括号是有顺序的。
        *   [本体][势力][兽族联盟][鼠族王国][风信子城][皇城区]枢机厅
        *                    faction        tags[0]   tags[1]  tags[2]  name
@@ -683,6 +737,18 @@
 
       node.parent = parent;
       node.depth = parent ? 2 : 1;
+
+      /**
+       * [DLC][扩展] 里没通过地理字段检查的，直接丢掉，不进 overview。
+       *
+       * 「男娘扮演功能」「命运抽卡」「汐海妖精」这些不是地点，也不是这个
+       * 扩展的势力总述 —— 它们只是 [扩展] 杂物箱里的规则条目。
+       * 放进 overview 会凭空造出一批空壳分组，把外交页的势力列表刷爆。
+       *
+       * 本体势力那套不动：那边的 overview 装的是「政治与社会」「文化」
+       * 这类真总述，是外交页档案卡的正文来源。
+       */
+      if (sp.isExt && !node.isPlace) continue;
 
       if (node.isPlace) factions[sp.faction].places.push(node);
       else factions[sp.faction].overview.push(node);
@@ -952,6 +1018,21 @@
       if (nChild) bits.push(nChild + ' 城区');
       fac.kind = bits.length ? bits.join(' · ')
         : (fac.places.length ? '只有地点条目' : '只有总述');
+    }
+
+    /**
+     * 剔掉「一个地点都没有、连总述也没有」的空分组。
+     *
+     * 放宽 [DLC][扩展] 解析后，像 [扩展][男娘扮演功能] 这种条目
+     * 会被拆出来建一个分组，但它里面没有任何地点 —— 外交页就会多出
+     * 一排「0 处地点」的空壳势力，正是把这个列表刷爆的原因。
+     *
+     * 只删完全空的：真的有总述条目（如永夜盟约）的留着，那种能出档案卡。
+     */
+    for (var fk in factions) {
+      if (!Object.prototype.hasOwnProperty.call(factions, fk)) continue;
+      var ff = factions[fk];
+      if (!ff.places.length && !ff.overview.length) delete factions[fk];
     }
 
     return factions;
