@@ -506,6 +506,43 @@
      */
     var TYPE_TAG = /^(地块|城镇|城市|村落|村庄|乡镇|要塞|港口|军港|圣所|大型城市|中型城镇|小型村镇|超级城市|小国|行省|帝国行省|势力|本体|地点|地标|城区|区域|聚落|营地|关隘|遗迹|胜景|建筑|设施|分割线|节庆|事件|人物|角色|组织|制度|传说|派系|经济|军事|文化|地理|历史)$/;
 
+    /**
+     * 行省 → 下辖城镇。
+     *
+     * 玩家的原话："行省好像有单独条目了，看看能不能子条目分。然后你这还是
+     * 没有国家总览，还是一堆城市"。
+     *
+     * 结构上确实是平的：[本体][势力][奥古斯提姆帝国]索莱尔省
+     *                  [本体][势力][奥古斯提姆帝国]翠庭城
+     * 两条同级，tag 里都没有「谁属于谁」。但它自己写了：
+     *   特色城镇: 翠庭城(省会)|渡鸦港
+     * 所以先扫一遍所有条目把这个字段收集起来，循环里再反查。
+     */
+    var townOfProvince = {};   // 城镇名 → 省名
+    var provinceOf = {};       // 势力名 → 该势力下的省名集合
+    var placeNames = {};       // 所有势力下的条目名，用于「名字前缀」认亲
+    (function mapProvinces() {
+      for (var pi = 0; pi < entries.length; pi += 1) {
+        var pe = entries[pi];
+        var psp = splitFactionTag(pe.comment);
+        if (!psp || !psp.name) continue;
+        placeNames[psp.name] = true;
+        if (!/(省|郡|州|道|行省)$/.test(psp.name)) continue;
+        var m = String(pe.content || '').match(/特色城镇\s*[:：]\s*([^\n]+)/);
+        if (!m) continue;
+        var parts = m[1].split(/[|｜、,，]/);
+        for (var ti2 = 0; ti2 < parts.length; ti2 += 1) {
+          // 「翠庭城(省会)」→「翠庭城」
+          var town = String(parts[ti2] || '').replace(/[（(][^）)]*[）)]/g, '').trim();
+          if (!town) continue;
+          if (!townOfProvince[town]) townOfProvince[town] = psp.name;
+        }
+        provinceOf[psp.name] = psp.faction;
+        if (!provinceOf[psp.faction]) provinceOf[psp.faction] = {};
+        provinceOf[psp.faction][psp.name] = true;
+      }
+    })();
+
     for (var i = 0; i < entries.length; i += 1) {
       var e = entries[i];
       var sp = splitFactionTag(e.comment);
@@ -577,12 +614,65 @@
         parent = tk;
         break;
       }
+      /**
+       * 优先按「特色城镇」认亲：省条目自己写了下辖哪些城。
+       * 这条比 tag 可靠——扁平结构里 tag 只到国家，认不出省市之分。
+       */
+      if (!parent && townOfProvince[sp.name]) parent = townOfProvince[sp.name];
+
+      /**
+       * 名字前缀认亲。
+       *
+       * 精灵王庭写的是 `艾尔文海姆-根心圣域`、`艾尔文海姆-栖居之环`——
+       * 父级名字直接摆在子项名字前面，tag 里反而没有。
+       *
+       * 但兽族联盟用 `地块-天镜湖湿地` 这种「类型-名字」写法，连字符前面的
+       * 「地块」不是地名。所以要求前缀本身是一条真实条目，且不是通用类型词。
+       */
+      if (!parent) {
+        var dash = sp.name.indexOf('-');
+        if (dash > 1) {
+          var head = sp.name.slice(0, dash);
+          if (placeNames[head] && head !== sp.name && !TYPE_TAG.test(head) && !NOT_PLACE_TAG.test(head)) {
+            parent = head;
+          }
+        }
+      }
+
       node.parent = parent;
       node.depth = parent ? 2 : 1;
 
       if (node.isPlace) factions[sp.faction].places.push(node);
       else factions[sp.faction].overview.push(node);
     }
+
+    /**
+     * 重算 depth：沿 parent 链往上数，数到没有父级的为止。
+     *
+     * 原来写死 parent?2:1，省下的城和城下的城区都是 2，看不出嵌套几层。
+     * 父节点可能在后半段才出现，所以必须等整轮跑完再算。
+     */
+    (function fixDepth() {
+      for (var fk in factions) {
+        if (!Object.prototype.hasOwnProperty.call(factions, fk)) continue;
+        var list = factions[fk].places;
+        var byName = {};
+        for (var ai = 0; ai < list.length; ai += 1) byName[list[ai].name] = list[ai];
+        for (var bi = 0; bi < list.length; bi += 1) {
+          var n = list[bi];
+          var d = 1;
+          var cur = n.parent;
+          var guard = 0;
+          while (cur && guard < 12) {
+            d += 1;
+            var up = byName[cur];
+            cur = up ? up.parent : '';
+            guard += 1;
+          }
+          n.depth = d;
+        }
+      }
+    })();
 
     /**
      * 补一层「大城市/大区」分组。

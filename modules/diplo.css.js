@@ -8,6 +8,62 @@
   'use strict';
 
   window.__fiefCssDiplo = String.raw`
+/* ---------------------------------------------------------------- 国家总览 */
+.fl-ov {
+  margin: 14px 0 4px;
+  padding: 13px 15px 11px;
+  border: 1px solid var(--fl-line);
+  border-radius: 10px;
+  background:
+    linear-gradient(160deg, rgba(212, 175, 90, 0.05), transparent 62%);
+}
+
+.fl-ov-h {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin-bottom: 9px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--fl-line);
+}
+
+.fl-ov-h b {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: .5px;
+  color: var(--fl-accent);
+}
+
+.fl-ov-h em {
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--fl-dimmer);
+}
+
+.fl-ov-row {
+  display: flex;
+  gap: 10px;
+  padding: 3px 0;
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.fl-ov-row k {
+  flex: 0 0 62px;
+  font-size: 10.5px;
+  letter-spacing: 1px;
+  color: var(--fl-dimmer);
+  white-space: nowrap;
+}
+
+.fl-ov-row v {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--fl-text);
+  word-break: break-word;
+}
+
 /* ---------------------------------------------------------------- 势力大卡 */
 .fl-dw {
   display: grid;

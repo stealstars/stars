@@ -535,6 +535,51 @@
     return flat;
   }
 
+  /**
+   * 势力总览。
+   *
+   * 玩家："你这还是没有国家总览，还是一堆城市"。
+   *
+   * 世界书里每家都有一条总述条目（`[本体][势力][奥古斯提姆帝国]奥古斯提姆帝国`），
+   * 写着 首都／统治者／主要城市／主要贵族／宗旨／行事风格 这些字段，
+   * 但扫描时它们被归进 overview，界面上从来没显示过——点进势力只看到一列地名。
+   * 这里把原文有的字段直接铺出来，没有的不补。
+   */
+  function renderOverview() {
+    var f = currentFaction();
+    if (!f) return '';
+    var ov = f.overview || [];
+    if (!ov.length) return '';
+
+    // 找总述：名字等于势力名的最优先，否则取第一条
+    var main = null;
+    for (var i = 0; i < ov.length; i += 1) {
+      if (ov[i].name === f.name) { main = ov[i]; break; }
+    }
+    if (!main) main = ov[0];
+    if (!main || !main.content) return '';
+
+    var FIELDS = ['定位', '首都', '统治者', '宗旨', '行事风格', '信仰', '标识',
+      '主要城市', '主要贵族', '主要威胁', '文化符号'];
+    var rows = '';
+    for (var fi = 0; fi < FIELDS.length; fi += 1) {
+      var key = FIELDS[fi];
+      var re = new RegExp('(?:^|[\\n|｜])\\s*' + key + '\\s*[:：]\\s*([^\\n]+)');
+      var m = String(main.content).match(re);
+      if (!m) continue;
+      var val = String(m[1] || '').trim();
+      if (!val) continue;
+      rows += '<div class="fl-ov-row"><k>' + esc(key) + '</k><v>' + esc(val) + '</v></div>';
+    }
+    if (!rows) return '';
+
+    return '<div class="fl-ov">'
+      + '<div class="fl-ov-h"><b>' + esc(f.name) + '</b>'
+      + '<em>' + ov.length + ' 条设定</em></div>'
+      + rows
+      + '</div>';
+  }
+
   function renderPlaces() {
     var f = currentFaction();
     if (!f) return '';
@@ -968,6 +1013,9 @@
 
     var f = currentFaction();
     if (f) {
+      // 先给国家总览，再列地点——不然点进去直接是一堆城市，看不出这是什么地方
+      out += renderOverview();
+
       var sz2 = f.size || {};
       var meta = [];
       if (sz2.duchies) meta.push(sz2.duchies + ' 公国');
