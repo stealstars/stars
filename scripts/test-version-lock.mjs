@@ -27,6 +27,32 @@ const m = SRC.match(/const TARGET_VERSION = '([^']*)';/);
 ok('找到 TARGET_VERSION', !!m);
 ok("默认值是空字符串（不锁）", m && m[1] === '', m && m[1]);
 
+/* ---------- 1b. manifest 与 loader.js 必须同步 ----------
+   踩过的坑：改了 loader.js 忘了提 LOADER_VERSION，线上本地都写着 2，
+   自更新判断「不比我新」就不动，酒馆里那份旧 loader 永远不换。 */
+console.log('\n=== 1b. manifest 记录的加载器版本与实际一致 ===');
+const MF = JSON.parse(fs.readFileSync('D:/223/fief-ledger/manifest.json', 'utf8'));
+const crypto = await import('node:crypto');
+const realSha = crypto.createHash('sha256').update(fs.readFileSync('D:/223/fief-ledger/loader.js')).digest('hex');
+const lvNow = SRC.match(/const\s+LOADER_VERSION\s*=\s*'(\d+)'/);
+
+ok('manifest 里有 loader 字段', !!MF.loader, JSON.stringify(MF.loader));
+if (MF.loader) {
+  ok('manifest 的 loader.version 与 loader.js 一致',
+    String(MF.loader.version) === (lvNow ? lvNow[1] : ''),
+    MF.loader.version + ' vs ' + (lvNow ? lvNow[1] : '?'));
+  ok('manifest 的 loader.sha256 与 loader.js 一致',
+    MF.loader.sha256 === realSha,
+    String(MF.loader.sha256).slice(0, 12) + ' vs ' + realSha.slice(0, 12));
+}
+ok('LOADER_VERSION 至少是 3（TARGET_VERSION 是 v3 引入的）',
+  lvNow && Number(lvNow[1]) >= 3, lvNow && lvNow[1]);
+
+/* build.mjs 要有「改了内容自动提版本号」的兜底 */
+const BUILD_SRC = fs.readFileSync('D:/223/fief-ledger/scripts/build.mjs', 'utf8');
+ok('build 会比对旧 manifest 的 loader.sha256', /old\.loader\.sha256/.test(BUILD_SRC));
+ok('build 会自动提升 LOADER_VERSION', /loaderAutoBumped/.test(BUILD_SRC));
+
 /* ---------- 2. 地址随版本切换 ---------- */
 /* 只跑配置那几行，不跑整个 loader */
 function sourcesFor(target) {

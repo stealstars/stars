@@ -56,6 +56,41 @@ if (bump) {
   console.log('版本 → ' + pkg.version);
 }
 
+/* ---------------- 加载器版本自检 ----------------
+   踩过的坑：改了 loader.js 却忘了把 LOADER_VERSION 往上提，结果线上和本地
+   版本号一样，酒馆里那份旧 loader 判断「不比我的新」，永远不更新——改了等于
+   没改。用户会直接问「你好像没改还」。
+   所以这里兜底：内容变了但版本号没变，自动 +1。 */
+const loaderPath = path.join(ROOT, 'loader.js');
+const loaderSrc = fs.readFileSync(loaderPath, 'utf8');
+const shaOf = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
+
+let loaderSha = shaOf(loaderSrc);
+const lvMatch = loaderSrc.match(/const\s+LOADER_VERSION\s*=\s*'(\d+)'/);
+let loaderVersion = lvMatch ? Number(lvMatch[1]) : 0;
+let loaderAutoBumped = false;
+
+if (lvMatch) {
+  const oldPath = path.join(ROOT, 'manifest.json');
+  if (fs.existsSync(oldPath)) {
+    try {
+      const old = JSON.parse(fs.readFileSync(oldPath, 'utf8'));
+      if (old.loader && old.loader.sha256 && old.loader.sha256 !== loaderSha
+        && Number(old.loader.version) === loaderVersion) {
+        loaderVersion += 1;
+        const fixed = loaderSrc.replace(
+          /(const\s+LOADER_VERSION\s*=\s*')\d+(')/,
+          '$1' + loaderVersion + '$2',
+        );
+        fs.writeFileSync(loaderPath, fixed, 'utf8');
+        loaderSha = shaOf(fixed);
+        loaderAutoBumped = true;
+        console.log('[自动] loader.js 内容变了但 LOADER_VERSION 没变 → 提到 ' + loaderVersion);
+      }
+    } catch (e) { /* 旧 manifest 坏了就算了 */ }
+  }
+}
+
 /* ---------------- 逐模块算 hash ---------------- */
 const modules = [];
 let totalBytes = 0;
@@ -103,6 +138,8 @@ const manifest = {
   schemaVersion: 1,
   loaderMin: '0.1.0',
   publishedAt: new Date().toISOString().slice(0, 10),
+  /* 加载器自身的版本与指纹：build 靠它判断「改了内容却没提版本号」 */
+  loader: { version: loaderVersion, sha256: loaderSha },
   moduleCount: modules.length,
   totalBytes,
   modules,
@@ -112,6 +149,7 @@ fs.writeFileSync(path.join(ROOT, 'manifest.json'), JSON.stringify(manifest, null
 
 console.log('\nmanifest.json 已生成');
 console.log('  版本   ' + manifest.version);
+console.log('  加载器 v' + loaderVersion + (loaderAutoBumped ? '（已自动提升）' : ''));
 console.log('  模块   ' + modules.length + ' 个');
 console.log('  合计   ' + (totalBytes / 1024).toFixed(1) + ' KB');
 console.log('  发布   ' + manifest.publishedAt);
