@@ -1,46 +1,36 @@
 /* ==========================================================================
- * 领地档案 · 加载器
+ * 领地档案 · 加载器 —— 酒馆里只导入这一个文件
  *
- * 酒馆里只导入这一个文件。它负责：
- *   1. 拉 manifest.json（jsDelivr / GitHub raw 依次试）
- *   2. 逐个拉模块，每个都算 SHA-256 比对
- *   3. 全部校验通过才按序执行
- *   4. 任何失败 -> 回退上次成功的缓存
- *   5. 状态挂在 window.__fiefLoader，控制台可查
+ * 流程：拉 manifest → 逐模块校验 SHA-256 → 全部通过才按序执行 → 失败回退缓存
+ * 状态挂 window.__fiefLoader，控制台可查。改模块不用重新导入，推仓库刷新即可。
  *
- * 改代码不用重新导入这个文件。改完推仓库，刷新页面即可。
+ * ★ 要改的地方都带星号，搜「★」就能全找到：
+ *     ★ TARGET_VERSION   版本锁。留空跟最新；填版本号锁死那版
+ *     ★ LOADER_VERSION   本文件版本。改了本文件就 +1
+ *     ★ SOURCES          仓库地址
+ *   发布版本号不在这里，在 package.json 第 3 行。
  * ========================================================================== */
 (() => {
   'use strict';
 
   /* ------------------------------------------------------- 配置 */
-  const OWNER = 'stealstars';
-  const REPO = 'stars';
   const BRANCH = 'main';
 
   /**
-   * 目标版本锁。**这是给别人用的保险。**
-   *
-   *   留空 ''        → 跟随最新（自己开发时用，发布完刷新就是新的）
-   *   填 '0.9.60'    → 锁死在这个版本，线上再发新版也不跟
-   *
-   * 为什么要有这个：别人的酒馆里跑的是这份脚本。我这边把代码写炸了、
-   * 或者发了个半成品，只要他这里的版本号没改，就还在跑他当初拿到的
-   * 那一版，完全不受影响。他想更新时，把这里改成新的版本号即可。
-   *
-   * 每个版本发布时会打一个 git tag（v0.9.60），所以历史版本永远可取、
-   * 内容永不改变——这是「锁得住」的前提。
+   * ★ 版本锁。给别人用的保险。
+   *   留空 ''       → 跟随最新（自己开发时用，发布完刷新就是新的）
+   *   填 '0.9.68'   → 锁死那版，线上再发新版也不跟
+   * 每版发布会打一个 git tag，所以历史版本永远可取、内容永不改变。
    */
   const TARGET_VERSION = '';
 
   /* 锁版本时走 tag 路径，没锁就走分支 */
   const REF = TARGET_VERSION ? ('v' + TARGET_VERSION) : BRANCH;
 
+  /* 源站：jsDelivr 在前（国内通常最快），GitHub raw 兜底 */
   const SOURCES = [
-    // jsDelivr，国内通常最快
-    'https://cdn.jsdelivr.net/gh/' + OWNER + '/' + REPO + '@' + REF + '/',
-    // GitHub raw
-    'https://raw.githubusercontent.com/' + OWNER + '/' + REPO + '/' + REF + '/',
+    'https://cdn.jsdelivr.net/gh/stealstars/stars@' + REF + '/',
+    'https://raw.githubusercontent.com/stealstars/stars/' + REF + '/',
   ];
 
   const CACHE_NAME = 'fief-ledger-v1';
@@ -50,16 +40,13 @@
   const INSTANCE_KEY = '__fiefLoader';
 
   /**
-   * 加载器自身的版本。改了 loader.js 就把这个数字加一。
+   * ★ 本文件版本。改了 loader.js 就把数字 +1（build 会自动提）。
    *
-   * 加这个是为了「不用重新导入」：酒馆里那份 loader.js 是导入那一刻固化下来的，
-   * 模块更新能靠刷新拉到，但 loader.js 自己的改动拉不到。所以启动时先问线上
-   * 有没有更新的 loader.js，有就动态装一份，用新的跑。
-   *
-   * 自更新只是「这次运行用新版」——酒馆里存的那份还是旧的，但它会一直自我更新，
-   * 所以再也不用动导入。等哪天想彻底同步，再导一次即可。
+   * 为什么要有：酒馆里那份 loader.js 是导入那一刻固化下来的，模块能靠刷新拉到，
+   * 但 loader.js 自己的改动拉不到。所以启动时先问线上有没有更新版，有就装来跑。
+   * 不 +1 的话，线上那份旧的判断「不比我的新」，改了等于没改。
    */
-  const LOADER_VERSION = '3';
+  const LOADER_VERSION = '4';
 
   const state = {
     disposed: false,
@@ -195,7 +182,7 @@
   }
 
   async function loadManifest() {
-    // 两个源同时问，取版本高的那个。
+    // 两个源同时问，取版本高的。
     // 只按顺序取第一个能用的会踩坑：jsDelivr 缓存旧版时它照样返回 200，
     // 于是就永远拿不到刚推的新版本。
     const results = await Promise.all(SOURCES.map(async (base) => {
@@ -322,12 +309,9 @@
   }
 
   /**
-   * 自更新：线上 loader.js 比本地新就装新的，用它跑一次。
-   *
-   * 判定用的是 loader.js 开头那行 `const LOADER_VERSION = 'N';`，
-   * 不走 manifest——manifest 的版本是模块版本，跟加载器本身无关。
-   *
-   * 失败一律当作「不用更新」，绝不让自更新挡住正常加载。
+   * 自更新：线上 loader.js 比本地新就装新的跑一次。
+   * 判定看开头那行 LOADER_VERSION，不走 manifest（那是模块版本，跟加载器无关）。
+   * 任何失败都当「不用更新」，绝不让自更新挡住正常加载。
    */
   async function selfUpdate() {
     // 已经自更新过就不再套娃
