@@ -8,7 +8,7 @@
  *     ★ TARGET_VERSION   版本锁。留空跟最新；填版本号锁死那版
  *     ★ LOADER_VERSION   本文件版本。改了本文件就 +1
  *     ★ SOURCES          仓库地址
- *   发布版本号不在这里，在 package.json 第 3 行。
+ *   发布版本号不在这里，在 package.json 第 2 行。
  * ========================================================================== */
 (() => {
   'use strict';
@@ -46,7 +46,7 @@
    * 但 loader.js 自己的改动拉不到。所以启动时先问线上有没有更新版，有就装来跑。
    * 不 +1 的话，线上那份旧的判断「不比我的新」，改了等于没改。
    */
-  const LOADER_VERSION = '4';
+  const LOADER_VERSION = '5';
 
   const state = {
     disposed: false,
