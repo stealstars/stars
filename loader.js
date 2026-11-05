@@ -18,14 +18,34 @@
   const REPO = 'stars';
   const BRANCH = 'main';
 
+  /**
+   * 目标版本锁。**这是给别人用的保险。**
+   *
+   *   留空 ''        → 跟随最新（自己开发时用，发布完刷新就是新的）
+   *   填 '0.9.60'    → 锁死在这个版本，线上再发新版也不跟
+   *
+   * 为什么要有这个：别人的酒馆里跑的是这份脚本。我这边把代码写炸了、
+   * 或者发了个半成品，只要他这里的版本号没改，就还在跑他当初拿到的
+   * 那一版，完全不受影响。他想更新时，把这里改成新的版本号即可。
+   *
+   * 每个版本发布时会打一个 git tag（v0.9.60），所以历史版本永远可取、
+   * 内容永不改变——这是「锁得住」的前提。
+   */
+  const TARGET_VERSION = '';
+
+  /* 锁版本时走 tag 路径，没锁就走分支 */
+  const REF = TARGET_VERSION ? ('v' + TARGET_VERSION) : BRANCH;
+
   const SOURCES = [
     // jsDelivr，国内通常最快
-    'https://cdn.jsdelivr.net/gh/' + OWNER + '/' + REPO + '@' + BRANCH + '/',
+    'https://cdn.jsdelivr.net/gh/' + OWNER + '/' + REPO + '@' + REF + '/',
     // GitHub raw
-    'https://raw.githubusercontent.com/' + OWNER + '/' + REPO + '/' + BRANCH + '/',
+    'https://raw.githubusercontent.com/' + OWNER + '/' + REPO + '/' + REF + '/',
   ];
 
   const CACHE_NAME = 'fief-ledger-v1';
+  /* 锁了版本就用独立缓存键，免得在版本之间串 */
+  const MANIFEST_KEY = TARGET_VERSION ? ('__manifest@v' + TARGET_VERSION) : '__manifest';
   const TIMEOUT = { manifest: 20000, module: 60000 };
   const INSTANCE_KEY = '__fiefLoader';
 
@@ -51,6 +71,8 @@
     startedAt: 0,
     selfUpdated: false,   // 是否已经把自己交给线上更新的版本
     loaderVersion: LOADER_VERSION,
+    targetVersion: TARGET_VERSION,   // '' = 跟随最新
+    ref: REF,
   };
 
   // 重复导入先清旧的
@@ -201,12 +223,17 @@
     }));
 
     const good = results.filter((r) => r.manifest);
-    if (good.length) {
+    /* 锁了版本就必须精确命中，不能拿别的版本凑合 */
+    const usable = TARGET_VERSION
+      ? good.filter((r) => r.manifest.version === TARGET_VERSION)
+      : good;
+
+    if (usable.length) {
       // 版本高的优先；同版本按 SOURCES 原顺序（jsDelivr 在前）
-      good.sort((a, b) => cmpVer(b.manifest.version, a.manifest.version));
-      const best = good[0];
+      usable.sort((a, b) => cmpVer(b.manifest.version, a.manifest.version));
+      const best = usable[0];
       state.source = best.base;
-      await cachePut('__manifest', best.bytes);
+      await cachePut(MANIFEST_KEY, best.bytes);
       const others = good.filter((r) => r !== best)
         .map((r) => r.base + '=v' + r.manifest.version).join(', ');
       log('manifest v' + best.manifest.version + ' 来自 ' + best.base
@@ -214,9 +241,16 @@
       return { manifest: best.manifest, fromCache: false };
     }
 
+    /* 锁了版本却拿不到——明确报错，不要静默降级到最新版 */
+    if (TARGET_VERSION && good.length) {
+      const seen = good.map((r) => 'v' + r.manifest.version).join(' / ');
+      throw new Error('版本已锁定 ' + TARGET_VERSION + '，但线上只有 ' + seen
+        + '。检查版本号是否写错，或这个版本还没打 tag。');
+    }
+
     // 全网失败，回退缓存
     log('manifest 网络全失败，试缓存：' + results.map((r) => r.base + ' -> ' + r.err).join('; '));
-    const cached = await cacheGet('__manifest');
+    const cached = await cacheGet(MANIFEST_KEY);
     if (!cached) {
       throw new Error('拿不到 manifest，也没有缓存。\n'
         + results.map((r) => r.base + ' -> ' + r.err).join('\n'));
@@ -405,7 +439,7 @@
     // 强制走网络：清掉缓存里的 manifest
     try {
       const c = await cacheOpen();
-      if (c) await c.delete('__manifest');
+      if (c) await c.delete(MANIFEST_KEY);
     } catch (e) { /* 忽略 */ }
     state.modules = [];
     state.phase = 'idle';
