@@ -33,6 +33,14 @@
   let dealKey = 0;      // 每次发牌 +1，用来重播入场动画
   let lastPicked = null; // 刚刚点下的那张，用于脉冲
 
+  /**
+   * 分区。政策页分两块：
+   *   draw = 抽卡（默认）—— 类别栏、AI 合成/自创、手牌
+   *   guo  = 国策     —— 已经颁布的政令，按类别归拢，能逐条撤
+   * 只存在内存里，刷新回到抽卡，不写盘。
+   */
+  let tab = 'draw';
+
   /* ------------------------------------------------ AI：合成 / 自创 */
   // 生成出来的政策不进牌库，单独放在这里，跟抽到的政策一样能选能删
   let custom = [];          // [{id,name,desc,cat,cost,risk,why,src}]
@@ -234,6 +242,17 @@
   function html() {
     if (!lib) return '<div class="fl-empty"><b>◇</b>政令数据未加载</div>';
 
+    /* 分区切换在最上方：抽卡 / 国策 */
+    const tabsHtml = '<div class="fl-ptabs" id="fl-ptabs">'
+      + '<span class="fl-ptab' + (tab === 'draw' ? ' on' : '') + '" data-t="draw">抽卡</span>'
+      + '<span class="fl-ptab' + (tab === 'guo' ? ' on' : '') + '" data-t="guo">国策'
+      + (chosen.length ? '<u>' + chosen.length + '</u>' : '')
+      + '</span></div>';
+
+    if (tab === 'guo') {
+      return '<div class="fl-policy">' + tabsHtml + guoHtml() + '</div>';
+    }
+
     const cats = ['全部'].concat(lib.CATS.map((c) => c.key));
     const catBar = cats.map((k) => {
       const c = lib.CATS.find((x) => x.key === k);
@@ -260,6 +279,7 @@
     }
 
     return `<div class="fl-policy">
+      ${tabsHtml}
       <div class="fl-pbar">
         <div class="fl-pcats">${catBar}</div>
         <div class="fl-pact">
@@ -287,6 +307,45 @@
         </div>
       </div>
     </div>`;
+  }
+
+  /* ------------------------------------------------------------ 国策分区 */
+  /**
+   * 国策分区：先放最朴素的样子——已选政令按顺序列出来，点一下就撤。
+   * 分组、代价、关系这些先不铺开，等口径定了再说。
+   */
+  function guoHtml() {
+    if (!chosen.length) {
+      return '<div class="fl-guo">'
+        + '<div class="fl-guo-empty">'
+        + '<b>还没定国策</b>'
+        + '<small>去「抽卡」挑几条政令，选中的会列在这里</small>'
+        + '</div></div>';
+    }
+
+    let out = '<div class="fl-guo">';
+    out += '<div class="fl-guo-head"><b>国 策</b><u>' + chosen.length + '</u></div>';
+    out += '<div class="fl-guo-list">';
+
+    for (const id of chosen) {
+      const it = itemOf(id);
+      if (!it) continue;
+      out += '<div class="fl-guo-item" data-del="' + escFn(it.id) + '"'
+        + ' style="--fl-pc:' + (it.color || 'var(--fl-accent)') + '">'
+        + '<b>' + escFn(it.name) + '</b>'
+        + '<u>' + escFn(it.cat) + '</u>'
+        + '<span>' + escFn(it.desc || '') + '</span>'
+        + '<i class="fl-guo-x" title="撤下这条">✕</i>'
+        + '</div>';
+    }
+
+    out += '</div>';
+    out += '<div class="fl-pgo">'
+      + '<button class="fl-btn primary fl-sendbtn" id="fl-send-guo"><span>填 进 聊 天 框</span></button>'
+      + '<button class="fl-btn ghost" id="fl-clear-guo">清空</button>'
+      + '</div>';
+    out += '</div>';
+    return out;
   }
 
   /* ------------------------------------------------ AI 面板（合成 / 自创） */
@@ -501,6 +560,40 @@
   function bind(rootEl) {
     const q = (s) => rootEl.querySelector(s);
 
+    /* 分区切换：抽卡 ↔ 国策 */
+    rootEl.querySelectorAll('.fl-ptab').forEach((n) => {
+      n.addEventListener('click', () => {
+        if (tab === n.dataset.t) return;
+        tab = n.dataset.t;
+        repaint(rootEl, false);
+      });
+    });
+
+    /* 国策区：点条目撤下这一条 */
+    rootEl.querySelectorAll('.fl-guo-item').forEach((n) => {
+      n.addEventListener('click', () => {
+        chosen = chosen.filter((x) => x !== n.dataset.del);
+        lastPicked = null;
+        repaint(rootEl, false);
+      });
+    });
+
+    const sg = q('#fl-send-guo');
+    if (sg) sg.addEventListener('click', () => {
+      const cmd = buildCommand();
+      if (!cmd) return;
+      fillFn(cmd);
+      sg.classList.remove('fired');
+      void sg.offsetWidth;
+      sg.classList.add('fired');
+      toastFn('已填进聊天框，可再改');
+    });
+
+    const cg = q('#fl-clear-guo');
+    if (cg) cg.addEventListener('click', () => {
+      chosen = []; lastPicked = null; repaint(rootEl, false);
+    });
+
     rootEl.querySelectorAll('.fl-pcat').forEach((n) => {
       n.addEventListener('click', () => {
         cat = n.dataset.c;
@@ -704,9 +797,11 @@
     setChosen(ids) { chosen = (ids || []).filter((x) => itemOf(x)); },
     custom: () => custom.slice(),
     _test: {
-      draw, reroll, pick, reset, relations, buildCommand, html, itemOf, allItems,
+      draw, reroll, pick, reset, relations, buildCommand, html, itemOf, allItems, guoHtml,
+      tab: () => tab,
+      setTab(t) { tab = t; },
       state: () => ({
-        cat, hand, chosen, rerolls,
+        cat, hand, chosen, rerolls, tab,
         discarded: Array.from(discarded), dealKey,
         custom: custom.map((x) => x.name), aiBusy, aiErr, lastResult,
       }),

@@ -65,6 +65,92 @@
   }
   .fl-drawbtn span { position: relative; z-index: 1; }
 
+  /* ---- 分区切换（抽卡 / 国策） ---- */
+  .fl-ptabs {
+    display: flex; align-items: center; gap: 6px;
+    padding-bottom: 10px; margin-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+  }
+  .fl-ptab {
+    position: relative;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 14px; border-radius: 8px;
+    font-size: 12.5px; letter-spacing: 1.5px;
+    color: var(--fl-dim); cursor: pointer;
+    border: 1px solid transparent;
+    transition: color .18s, border-color .18s, background .18s, box-shadow .2s;
+  }
+  .fl-ptab:hover { color: var(--fl-text); background: rgba(255,255,255,.04); }
+  .fl-ptab.on {
+    color: var(--fl-accent);
+    border-color: rgba(var(--fl-accent-rgb), .55);
+    background: rgba(var(--fl-accent-rgb), .13);
+    box-shadow: 0 0 14px rgba(var(--fl-accent-rgb), .16);
+  }
+  .fl-ptab.on::after {
+    content: ""; position: absolute; left: 10px; right: 10px; bottom: -11px; height: 1px;
+    background: var(--fl-accent); box-shadow: 0 0 6px var(--fl-accent);
+  }
+  .fl-ptab u {
+    font-style: normal; text-decoration: none;
+    min-width: 16px; padding: 0 4px; border-radius: 8px;
+    font-size: 10.5px; line-height: 15px; text-align: center;
+    background: rgba(var(--fl-accent-rgb), .28); color: #fff3cf;
+  }
+
+  /* ---- 国策分区（先做朴素版，详细设计待定） ---- */
+  .fl-guo { display: flex; flex-direction: column; gap: 12px; }
+
+  .fl-guo-empty {
+    display: flex; flex-direction: column; align-items: center; gap: 9px;
+    padding: 48px 20px; border-radius: 12px;
+    border: 1px dashed rgba(255,255,255,.12);
+    background: rgba(255,255,255,.015);
+    text-align: center;
+  }
+  .fl-guo-empty b { font-size: 14px; font-weight: 500; color: var(--fl-dim); letter-spacing: 2px; }
+  .fl-guo-empty small { font-size: 11.5px; color: var(--fl-dimmer); }
+
+  .fl-guo-head { display: flex; align-items: baseline; gap: 10px; }
+  .fl-guo-head b { font-size: 14px; font-weight: 600; letter-spacing: 4px; color: var(--fl-accent); }
+  .fl-guo-head u {
+    font-style: normal; text-decoration: none;
+    font-size: 12px; color: #fff3cf;
+    background: rgba(var(--fl-accent-rgb), .26);
+    padding: 0 7px; border-radius: 8px; line-height: 18px;
+  }
+
+  .fl-guo-list {
+    border-radius: 10px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,.07);
+    background: rgba(255,255,255,.018);
+  }
+  .fl-guo-item {
+    --fl-pc: var(--fl-accent);
+    display: grid; grid-template-columns: auto auto 1fr auto;
+    align-items: baseline; gap: 10px;
+    padding: 9px 12px;
+    border-bottom: 1px solid rgba(255,255,255,.05);
+    border-left: 2px solid var(--fl-pc);
+    cursor: pointer;
+    transition: background .16s;
+  }
+  .fl-guo-item:last-child { border-bottom: 0; }
+  .fl-guo-item:hover { background: rgba(255,255,255,.035); }
+  .fl-guo-item b { font-size: 13px; font-weight: 500; color: var(--fl-pc); letter-spacing: .5px; }
+  .fl-guo-item u {
+    font-style: normal; text-decoration: none;
+    font-size: 10.5px; color: var(--fl-dim);
+    border: 1px solid rgba(255,255,255,.12);
+    padding: 0 5px; border-radius: 6px; line-height: 15px;
+  }
+  .fl-guo-item span { font-size: 11.5px; color: var(--fl-dimmer); line-height: 1.6; }
+  .fl-guo-x {
+    font-style: normal; font-size: 12px; color: var(--fl-dimmer);
+    opacity: 0; transition: opacity .16s, color .16s;
+  }
+  .fl-guo-item:hover .fl-guo-x { opacity: 1; color: #d4736a; }
+
   /* ---- 类别条 ---- */
   .fl-pcat {
     --fl-pc: var(--fl-accent);
