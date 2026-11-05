@@ -51,6 +51,9 @@
   let lastResult = null;    // 合成结果，显示在结果条里
 
   let ctx = {};             // 主脚本塞进来的领地上下文
+  let focusHost = null;     // 国策树要用：拿 localStorage
+  let focusChatId = '';     // 国策进度按聊天隔离
+  let focusMounted = false;
 
   const AI = () => window.__fiefAI || null;
   const PR = () => window.__fiefPolicyAI || null;
@@ -311,41 +314,36 @@
 
   /* ------------------------------------------------------------ 国策分区 */
   /**
-   * 国策分区：先放最朴素的样子——已选政令按顺序列出来，点一下就撤。
-   * 分组、代价、关系这些先不铺开，等口径定了再说。
+   * 国策分区交给 modules/focus.ui.js 画（十国焦点树）。
+   * 这里只出一个挂载点，真正的渲染在 render() 里做——
+   * 因为焦点树要读 localStorage 和聊天 id，那些由主脚本在 mount 时给。
    */
   function guoHtml() {
-    if (!chosen.length) {
-      return '<div class="fl-guo">'
-        + '<div class="fl-guo-empty">'
-        + '<b>还没定国策</b>'
-        + '<small>去「抽卡」挑几条政令，选中的会列在这里</small>'
-        + '</div></div>';
+    return '<div class="fx-host" id="fx-host"></div>';
+  }
+
+  /** 把焦点树挂进占位容器 */
+  function mountFocus(el) {
+    const F = window.__fiefFocusUI;
+    if (!F) {
+      el.innerHTML = '<div class="fx-empty"><b>国策模块没加载</b>'
+        + '<small>请重新导入脚本，或检查 manifest 里有没有 focus.ui.js</small></div>';
+      return;
     }
-
-    let out = '<div class="fl-guo">';
-    out += '<div class="fl-guo-head"><b>国 策</b><u>' + chosen.length + '</u></div>';
-    out += '<div class="fl-guo-list">';
-
-    for (const id of chosen) {
-      const it = itemOf(id);
-      if (!it) continue;
-      out += '<div class="fl-guo-item" data-del="' + escFn(it.id) + '"'
-        + ' style="--fl-pc:' + (it.color || 'var(--fl-accent)') + '">'
-        + '<b>' + escFn(it.name) + '</b>'
-        + '<u>' + escFn(it.cat) + '</u>'
-        + '<span>' + escFn(it.desc || '') + '</span>'
-        + '<i class="fl-guo-x" title="撤下这条">✕</i>'
-        + '</div>';
+    if (!focusMounted) {
+      F.mount({
+        lib: window.__fiefFocusData,
+        esc: escFn,
+        toast: toastFn,
+        fillComposer: fillFn,
+        host: focusHost,
+        chatId: focusChatId,
+      });
+      focusMounted = true;
     }
-
-    out += '</div>';
-    out += '<div class="fl-pgo">'
-      + '<button class="fl-btn primary fl-sendbtn" id="fl-send-guo"><span>填 进 聊 天 框</span></button>'
-      + '<button class="fl-btn ghost" id="fl-clear-guo">清空</button>'
-      + '</div>';
-    out += '</div>';
-    return out;
+    F.setChat(focusChatId);
+    F.setContext(ctx);
+    F.render(el);
   }
 
   /* ------------------------------------------------ AI 面板（合成 / 自创） */
@@ -569,30 +567,7 @@
       });
     });
 
-    /* 国策区：点条目撤下这一条 */
-    rootEl.querySelectorAll('.fl-guo-item').forEach((n) => {
-      n.addEventListener('click', () => {
-        chosen = chosen.filter((x) => x !== n.dataset.del);
-        lastPicked = null;
-        repaint(rootEl, false);
-      });
-    });
-
-    const sg = q('#fl-send-guo');
-    if (sg) sg.addEventListener('click', () => {
-      const cmd = buildCommand();
-      if (!cmd) return;
-      fillFn(cmd);
-      sg.classList.remove('fired');
-      void sg.offsetWidth;
-      sg.classList.add('fired');
-      toastFn('已填进聊天框，可再改');
-    });
-
-    const cg = q('#fl-clear-guo');
-    if (cg) cg.addEventListener('click', () => {
-      chosen = []; lastPicked = null; repaint(rootEl, false);
-    });
+    /* 国策分区由 focus.ui 自己绑事件，这里不碰 */
 
     rootEl.querySelectorAll('.fl-pcat').forEach((n) => {
       n.addEventListener('click', () => {
@@ -780,8 +755,16 @@
       if (opts.esc) escFn = opts.esc;
       if (opts.toast) toastFn = opts.toast;
       if (opts.fillComposer) fillFn = opts.fillComposer;
+      if (opts.host) focusHost = opts.host;
+      if (opts.chatId) focusChatId = opts.chatId;
       draw();
       return this;
+    },
+    /** 主脚本换聊天时调：国策进度按聊天隔离，要跟着切 */
+    setChat(id) {
+      const next = id || '';
+      if (next === focusChatId) return;
+      focusChatId = next;
     },
     /** 主脚本塞领地上下文，合成/自创时用 */
     setContext(o) { ctx = Object.assign({}, ctx, o || {}); },
@@ -789,6 +772,8 @@
       if (!container) return;
       container.innerHTML = html();
       bind(container);
+      const fx = container.querySelector('#fx-host');
+      if (fx) mountFocus(fx);
       const h = container.querySelector('.fl-phand');
       if (h) h.classList.add('dealing');
     },

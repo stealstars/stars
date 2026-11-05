@@ -57,10 +57,9 @@ console.log('\n=== 2. 切到国策分区 ===');
 T.setTab('guo');
 const h2 = T.html();
 ok('切过去生效', T.tab() === 'guo');
-ok('显示国策容器', /class="fl-guo"/.test(h2));
-ok('空态有提示', /还没定国策/.test(h2));
+ok('国策分区出一个挂载点（焦点树由 focus.ui 填）', /id="fx-host"/.test(h2));
 ok('抽卡按钮不再出现', !/id="fl-draw"/.test(h2));
-ok('分区切换条仍在最上方', h2.indexOf('fl-ptabs') < h2.indexOf('fl-guo'));
+ok('分区切换条仍在最上方', h2.indexOf('fl-ptabs') < h2.indexOf('fx-host'));
 ok('国策标签是选中态', /class="fl-ptab on" data-t="guo"/.test(h2));
 
 /* ---------- 3. 选了政令之后 ---------- */
@@ -73,25 +72,18 @@ const h3 = T.html();
 ok('分区标签带数量', /data-t="guo">国策<u>3<\/u>/.test(h3),
   (h3.match(/data-t="guo">[^/]{0,30}/) || [''])[0]);
 
+/* 抽卡区底部仍然有已颁政令和发送 */
+ok('抽卡区底部有已颁政令', /fl-chosen/.test(h3) || /已 颁 政 令/.test(h3));
+ok('抽卡区底部有发送按钮', /id="fl-send"/.test(h3));
+
+/* ---------- 4. 国策分区不掺和政令 ---------- */
+console.log('\n=== 4. 国策分区与政令互不干扰 ===');
 T.setTab('guo');
 const h4 = T.html();
-ok('国策区列出三条名称',
-  ['轻徭薄赋', '鼓励工商', '扩编常备'].every((n) => h4.includes(n)),
-  ['轻徭薄赋', '鼓励工商', '扩编常备'].filter((n) => !h4.includes(n)).join(','));
-ok('每条带类别标签', /民生/.test(h4) && /经济/.test(h4) && /军事/.test(h4));
-ok('每条带说明', /今年减税三成/.test(h4));
-ok('三条各有一个撤下按钮', (h4.match(/class="fl-guo-x"/g) || []).length === 3,
-  (h4.match(/class="fl-guo-x"/g) || []).length);
-ok('底部有发送与清空', /id="fl-send-guo"/.test(h4) && /id="fl-clear-guo"/.test(h4));
-
-/* ---------- 4. 撤下一条 ---------- */
-console.log('\n=== 4. 撤下一条 ===');
-UI.setChosen(['民1', '经1']);
-T.setTab('guo');
-const h5 = T.html();
-ok('剩两条', (h5.match(/class="fl-guo-item"/g) || []).length === 2,
-  (h5.match(/class="fl-guo-item"/g) || []).length);
-ok('被撤的不见了', !h5.includes('扩编常备'));
+ok('国策分区里没有政令卡片', !/fl-pc-in/.test(h4));
+ok('国策分区里没有已颁政令条', !/fl-chosen/.test(h4));
+T.setTab('draw');
+ok('切回抽卡后政令还在', UI.chosen().length === 3, UI.chosen().length);
 
 /* ---------- 5. render 不报错 ---------- */
 console.log('\n=== 5. render 走一遍 ===');

@@ -3125,12 +3125,13 @@
 
   `;
 
-  /* --- 模块样式：来自 modules/policy.css.js、ai.css.js、diplo.css.js --- */
+  /* --- 模块样式：来自 modules/policy.css.js、ai.css.js、diplo.css.js、focus.css.js --- */
   function injectModuleCss() {
     const list = [
       ['fief-ledger-css-policy', window.__fiefCssPolicy],
       ['fief-ledger-css-ai', window.__fiefCssAi],
       ['fief-ledger-css-diplo', window.__fiefCssDiplo],
+      ['fief-ledger-css-focus', window.__fiefCssFocus],
     ];
     for (const pair of list) {
       const id = pair[0], css = pair[1];
@@ -5385,6 +5386,8 @@
         esc,
         toast: (m) => toast(m),
         fillComposer,
+        host,
+        chatId: currentChatId(),
       });
       policyMounted = true;
     }
@@ -5400,6 +5403,10 @@
           treasury: (d && d.info && d.info.金库) || '',
         });
       } catch (e) { /* 忽略 */ }
+    }
+    // 换聊天之后进度要跟着换，这里同步一次
+    if (typeof mod.setChat === 'function') {
+      try { mod.setChat(currentChatId()); } catch (e) { /* 忽略 */ }
     }
     mod.render(viewEl);
     bindPolicyChrome();
