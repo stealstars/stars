@@ -1,7 +1,7 @@
 {
   "name": "fief-ledger",
   "displayName": "领地档案",
-  "version": "0.9.66",
+  "version": "0.9.67",
   "channel": "stable",
   "schemaVersion": 1,
   "loaderMin": "0.1.0",
@@ -10,8 +10,8 @@
     "version": 3,
     "sha256": "dbda3c6914b46bb1470130bd65e0edd79abedd15e5bdf969a74a110756b00cd4"
   },
-  "moduleCount": 16,
-  "totalBytes": 842347,
+  "moduleCount": 17,
+  "totalBytes": 867301,
   "modules": [
     {
       "path": "modules/worldbook.js",
@@ -80,6 +80,12 @@
       "sha256": "302cfc2797c70ba6240a16d28a03b203fc32b2fa9c2af798a6c1509f712ac750"
     },
     {
+      "path": "modules/prompts/focus.js",
+      "desc": "国策提示词",
+      "bytes": 13942,
+      "sha256": "4ce99c97a8cd66390cd5f880c2d62a8ca74ac1390414ca890c9ddc1bf0fcaafd"
+    },
+    {
       "path": "modules/focus.data.js",
       "desc": "国策树数据",
       "bytes": 295195,
@@ -88,14 +94,14 @@
     {
       "path": "modules/focus.css.js",
       "desc": "国策树样式",
-      "bytes": 10503,
-      "sha256": "1a1ff122f3a9e835006a18f04d6dbda3f00cd8b32d67e477612c265342d846d5"
+      "bytes": 12268,
+      "sha256": "0fa98dfe847e54e3e02cc22e91f28b212a85ec5934cb8a44e7c1e1639a40bee8"
     },
     {
       "path": "modules/focus.ui.js",
       "desc": "国策树界面",
-      "bytes": 17737,
-      "sha256": "c3a7ce2e487c51022070bb041f599c28bf3379cd860dbfbc4cd26e85295abfe3"
+      "bytes": 25478,
+      "sha256": "30899b22f16a670404f0dd93812474c5544a9a5cf3a4f4d8df833ae0171ee9c7"
     },
     {
       "path": "modules/gov.js",
@@ -106,8 +112,8 @@
     {
       "path": "modules/core.js",
       "desc": "主脚本",
-      "bytes": 260234,
-      "sha256": "525d63414f07a4fdcd7b7f9015bb53a3e2d1f66719e6d4347688607ccf511889"
+      "bytes": 261740,
+      "sha256": "753e69b5baaf06dca562de05b4d037ba809573c73c58173be38560e5dcf81ab0"
     }
   ]
 }
