@@ -66,6 +66,17 @@ step(4, '推送根目录');
 const root = run([path.join(ROOT, 'scripts/push-root.mjs'), TOKEN]);
 say(root.out.split('\n').filter((l) => /更新|完成|失败/.test(l)).join('\n'));
 
+/* ---------- 4b. 打版本 tag ----------
+   tag 必须打在「已经包含最终 manifest.json」的 commit 上，
+   所以放在推完根目录之后。没有 tag 就没法锁版本。 */
+step('4b', '打版本 tag');
+const tagRes = run([path.join(ROOT, 'scripts/tag.mjs'), TOKEN]);
+say(tagRes.out.split('\n').filter((l) => /版本|tag|已|锁定|TARGET/.test(l)).join('\n'));
+if (tagRes.code !== 0) {
+  console.error('打 tag 失败。版本锁靠 tag，不能跳过。');
+  process.exit(1);
+}
+
 /* ---------- 5. 核对线上 ---------- */
 step(5, '核对线上 hash');
 const gh = async (p) => {
