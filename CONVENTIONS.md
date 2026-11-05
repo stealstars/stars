@@ -168,6 +168,33 @@ manifest 里也记了 `loader: { version, sha256 }`，`test-version-lock.mjs` �
 
 ## 七、改代码的流程
 
+### 版本号只有一个源头
+
+```
+package.json  第 3 行  "version": "0.9.68"     ← 只有这里是真的
+```
+
+其余全是生成物或另一回事，**别手改**：
+
+| 位置 | 是什么 | 能不能手改 |
+|---|---|---|
+| `package.json` `version` | 发布版本号，唯一源头 | ✅ 就是改这里 |
+| `manifest.json` `version` | build 从上面抄过去的 | ❌ 改了下一次 build 就覆盖 |
+| `loader.js` `TARGET_VERSION` | 版本锁，空 = 跟随 main | ✅ 要钉死某版才填 |
+| `loader.js` `LOADER_VERSION` | 加载器自己的版本（现在是 3） | ⚠️ 一般别碰，build 会自动提 |
+
+平时根本不用手改版本号：
+
+```bash
+node scripts/build.mjs --bump     # 末位 +1，写回 package.json
+node scripts/publish.mjs          # 默认就 bump，一路推到线上
+```
+
+想跳到指定版本（比如从 0.9.68 直接到 0.10.0），就手动改 `package.json` 第 3 行，
+然后 `node scripts/publish.mjs --no-bump`。
+
+### 改代码的顺序
+
 ```
 1. 先跑数据，不猜
    node scripts/audit-real.mjs      看真实条目怎么分类
@@ -281,9 +308,21 @@ localStorage `fief-focus-<chatId>`，按聊天隔离，**不写变量、不进 p
 
 ### 快讯
 
-焦点完成时**本地拼一条**（标题 / 周期 / 说明 / 影响），存 localStorage，国策页底部展示。
+焦点完成时先**本地拼一条**（标题 / 周期 / 说明 / 影响），保证一定有内容；
+然后如果 AI 接口配好了，再异步交给 AI 重写一遍正文（40-70 字施政快讯）。
+
+- 本地那条标 `_raw: true`，AI 写成功才清掉
+- AI 失败就保留本地那条，绝不因此丢内容
+- 一次只润色一条，不并发打接口
+- 没配接口就跳过，标记留着以后再说
 
 不走正则、不写楼层、不占 prompt——脚本自己生成、自己读。
+
+### 生成树需要 API
+
+点生成按钮前会先看 `__fiefAI.getConf()` 的 `base / key / model` 三样是否齐全。
+
+没配就不让点空按钮，直接给「去设置 → API 配一个」，点了跳到设置页（`goPage('设置')`）。
 
 ### 布局算法
 
@@ -295,8 +334,8 @@ localStorage `fief-focus-<chatId>`，按聊天隔离，**不写变量、不进 p
 ## 十、当前版本
 
 ```
-0.9.67
-17 个模块 / 847 KB
-tag v0.9.67
+0.9.68
+17 个模块 / 850 KB
+tag v0.9.68
 ```
 
