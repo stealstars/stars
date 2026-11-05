@@ -148,6 +148,22 @@ loader.js 顶部有 `TARGET_VERSION`：
 
 给别人的时候：把 `TARGET_VERSION` 填成当时的稳定版本号。
 
+### 改 loader.js 必须提 LOADER_VERSION
+
+loader.js 自己也有个版本号（`const LOADER_VERSION = 'N'`），自更新的判断是
+**线上版本 > 本地版本**才动。
+
+踩过的坑：给 loader 加了新功能却没提这个数字，线上本地都写着 2，
+于是酒馆里那份旧 loader 认为「线上不比我新」，永远不换——**改了等于没改**，
+用户直接问「你好像没改还」。
+
+现在 `build.mjs` 会兜底：比对旧 manifest 里的 `loader.sha256`，
+发现内容变了而版本号没变，自动 +1 并回写 loader.js。
+manifest 里也记了 `loader: { version, sha256 }`，`test-version-lock.mjs` 会核对。
+
+> 另注：`raw.githubusercontent.com` 和 jsDelivr 对分支路径都有缓存（几分钟到几小时），
+> 发布后立刻查可能还是旧的。用 Contents API 查才是权威；要立刻拿到新版，重新导入最快。
+
 ---
 
 ## 七、改代码的流程
