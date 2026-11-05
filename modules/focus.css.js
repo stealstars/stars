@@ -263,6 +263,11 @@
   .fx-gen-btn { align-self: flex-start; }
   .fx-gen-note { font-size: 10.5px; line-height: 1.7; color: var(--fl-dimmer); }
   .fx-gen-err { font-size: 11px; line-height: 1.7; color: rgba(201, 119, 106, .95); }
+  .fx-gen-link {
+    color: var(--fl-accent); cursor: pointer;
+    border-bottom: 1px dashed rgba(var(--fl-accent-rgb), .45);
+  }
+  .fx-gen-link:hover { border-bottom-style: solid; }
   .fx-gen-tag {
     font-style: normal; text-decoration: none;
     font-size: 9px; letter-spacing: 1px; padding: 1px 5px; border-radius: 2px;

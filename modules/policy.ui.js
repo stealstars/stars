@@ -54,6 +54,7 @@
   let focusHost = null;     // 国策树要用：拿 localStorage
   let focusChatId = '';     // 国策进度按聊天隔离
   let focusMounted = false;
+  let focusGoSettings = null;   // 国策生成要配 API，缺了要能跳过去
 
   const AI = () => window.__fiefAI || null;
   const PR = () => window.__fiefPolicyAI || null;
@@ -338,6 +339,7 @@
         fillComposer: fillFn,
         host: focusHost,
         chatId: focusChatId,
+        goSettings: focusGoSettings,
       });
       focusMounted = true;
     }
@@ -757,6 +759,7 @@
       if (opts.fillComposer) fillFn = opts.fillComposer;
       if (opts.host) focusHost = opts.host;
       if (opts.chatId) focusChatId = opts.chatId;
+      if (opts.goSettings) focusGoSettings = opts.goSettings;
       draw();
       return this;
     },

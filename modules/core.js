@@ -5388,6 +5388,7 @@
         fillComposer,
         host,
         chatId: currentChatId(),
+        goSettings: () => { try { goPage('设置'); } catch (e) { /* 忽略 */ } },
       });
       policyMounted = true;
     }

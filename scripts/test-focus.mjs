@@ -364,5 +364,29 @@ singleMutex.nodes[0].mutex = { group: 'g1', route: 'a', lock: 'start', reason: '
 const nm = FAI.normalize(singleMutex);
 ok('只有一条的互斥组被清空', nm.nodes[0].mutex === null, JSON.stringify(nm.nodes[0].mutex));
 
+/* ---------- 12. 没配 API 时的提示 ---------- */
+console.log('\n=== 12. 没配 API 时的提示 ===');
+T.setCountry('奥古斯提姆帝国');
+T.setDone([]);
+T.setSel(null);
+const hNoAi = T.html();
+ok('生成按钮仍在', /data-gen="1"/.test(hNoAi));
+ok('提示去设置里配接口', /去设置/.test(hNoAi), (hNoAi.match(/还没配[^<]{0,40}/) || [''])[0]);
+ok('「去设置」是可点的', /data-goset="1"/.test(hNoAi));
+
+/* ---------- 13. 快讯润色标记 ---------- */
+console.log('\n=== 13. 快讯润色 ===');
+T.setNews([{ at: '本年三月', title: '编练乡勇', body: '本地拼的说明', eff: '', _raw: true }]);
+T.setCountry('奥古斯提姆帝国');
+const hNews = T.html();
+ok('快讯能渲染出来', /编练乡勇/.test(hNews));
+ok('快讯带正文', /本地拼的说明/.test(hNews));
+
+/* 没配 AI 时不该把 _raw 清掉（留着以后润色） */
+T.setNews([{ at: '', title: '测试', body: '正文', eff: '', _raw: true }]);
+const before = JSON.stringify(T.news());
+UI.render({ innerHTML: '', querySelector: () => null, querySelectorAll: () => [] });
+ok('没配 AI 时不动润色标记', JSON.stringify(T.news()) === before, '变了');
+
 console.log('\n' + (fail ? fail + ' 项失败  ' : '全部通过 ✔  ') + (pass + fail) + ' 项');
 process.exit(fail ? 1 : 0);

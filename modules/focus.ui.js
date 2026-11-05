@@ -30,6 +30,7 @@
   let escFn = (s) => String(s == null ? '' : s);
   let toastFn = () => {};
   let fillFn = () => {};
+  let goSettingsFn = null;
   let host = null;
 
   let countryId = '';
@@ -241,12 +242,79 @@
       body: String(n.description || '').slice(0, 100),
       eff: eff.join('；'),
       country: countryId,
+      _raw: true,        // 本地拼的，等 AI 有空润色一遍
     });
     if (news.length > NEWS_MAX) news.length = NEWS_MAX;
     save();
   }
 
+  /* ------------------------------------------------------------ 快讯润色 */
+  let polishBusy = false;
+  let lastRoot = null;
+
+  /**
+   * 把本地拼的那条快讯交给 AI 重写一遍。
+   * 失败就保留本地那条，绝不因此丢内容。
+   */
+  async function polishOne(i) {
+    const ai = window.__fiefAI;
+    if (!ai || !aiReady()) return false;
+    const it = news[i];
+    if (!it || !it._raw) return false;
+
+    try {
+      const raw = await ai.chat(
+        '领地：' + (it.country || countryId) + '\n'
+        + '刚办成的事：' + it.title + '\n'
+        + '原本的说明：' + (it.body || '无') + '\n'
+        + '影响：' + (it.eff || '无') + '\n\n'
+        + '写一条施政快讯，40-70 字。只写发生了什么、接下来会怎样，'
+        + '不要评价好坏，不要用「我」「陛下」「在下」，不要加标题。只输出正文。',
+        { temperature: 0.8, maxTokens: 300 },
+      );
+      const txt = String(raw || '').trim()
+        .replace(/^["「『]/, '').replace(/["」』]$/, '')
+        .replace(/\s+/g, ' ');
+      if (txt.length >= 12 && txt.length <= 200) {
+        news[i].body = txt;
+        news[i]._raw = false;
+        save();
+        return true;
+      }
+    } catch (e) { /* 静默失败，保留本地那条 */ }
+
+    /* 失败也把标记去掉，别每次渲染都重试 */
+    news[i]._raw = false;
+    save();
+    return false;
+  }
+
+  /** 有没润色的就补一条，一次只跑一个，免得并发打接口 */
+  function flushPolish() {
+    if (polishBusy) return;
+    if (!aiReady()) return;     // 没配接口就别折腾，留着本地那条
+    const i = news.findIndex((x) => x && x._raw);
+    if (i < 0) return;
+    polishBusy = true;
+    polishOne(i).then((changed) => {
+      polishBusy = false;
+      if (changed && lastRoot && lastRoot.isConnected !== false) {
+        repaint(lastRoot);
+      }
+    });
+  }
+
   /* ------------------------------------------------------------ 生成树 */
+  /** AI 通道是否可用：地址、密钥、模型三样都填了才算 */
+  function aiReady() {
+    const ai = window.__fiefAI;
+    if (!ai || typeof ai.getConf !== 'function') return false;
+    try {
+      const c = ai.getConf();
+      return !!(c && c.base && c.key && c.model);
+    } catch (e) { return false; }
+  }
+
   async function generate(rootEl) {
     const ai = window.__fiefAI;
     const FAI = window.__fiefFocusAI;
@@ -470,8 +538,14 @@
       out += '<div class="fx-gen-note">正在拟这棵树的稿…（十来个焦点，可能要几十秒）</div>';
     } else {
       out += '<button class="fl-btn ghost fx-gen-btn" data-gen="1">＋ 给本领地生成国策树</button>';
-      out += '<div class="fx-gen-note">用领地实况（规模、势力、政体、金库）让 AI 现造一棵，'
-        + '存本地、按聊天隔离。</div>';
+      if (aiReady()) {
+        out += '<div class="fx-gen-note">用领地实况（规模、势力、政体、金库）让 AI 现造一棵，'
+          + '存本地、按聊天隔离。</div>';
+      } else {
+        out += '<div class="fx-gen-note">还没配 AI 接口。'
+          + '<span class="fx-gen-link" data-goset="1">去设置 → API 配一个</span>，'
+          + '配好回来就能生成。</div>';
+      }
     }
     if (genErr) out += '<div class="fx-gen-err">' + escFn(genErr) + '</div>';
     out += '</div>';
@@ -605,6 +679,12 @@
     const gen = q('[data-gen]');
     if (gen) gen.addEventListener('click', () => { generate(rootEl); });
 
+    const goset = q('[data-goset]');
+    if (goset) goset.addEventListener('click', () => {
+      if (goSettingsFn) { try { goSettingsFn(); } catch (e) { /* 忽略 */ } }
+      else toastFn('去底部导航的「设置」里配 API');
+    });
+
     /* 推进：进「进行中」，不直接完成 */
     const run = q('[data-run]');
     if (run) run.addEventListener('click', () => {
@@ -661,6 +741,7 @@
       if (opts.esc) escFn = opts.esc;
       if (opts.toast) toastFn = opts.toast;
       if (opts.fillComposer) fillFn = opts.fillComposer;
+      if (opts.goSettings) goSettingsFn = opts.goSettings;
       host = opts.host || window;
       chatId = opts.chatId || '';
       load();
@@ -700,8 +781,10 @@
     },
     render(container) {
       if (!container) return;
+      lastRoot = container;
       container.innerHTML = html();
       bind(container);
+      flushPolish();
     },
     _test: {
       html, layout, stateOf, prereqMet, meters, reqList, buildCommand, mutexTaken,
