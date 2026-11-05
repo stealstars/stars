@@ -258,6 +258,37 @@
   .fx-d-note { font-size: 11px; line-height: 1.6; color: var(--fl-dimmer); flex: 1; }
   .fx-d-note b { color: rgba(201, 119, 106, .95); font-weight: 400; }
 
+  /* ---- 生成树 ---- */
+  .fx-gen { display: flex; flex-direction: column; gap: 7px; padding-top: 2px; }
+  .fx-gen-btn { align-self: flex-start; }
+  .fx-gen-note { font-size: 10.5px; line-height: 1.7; color: var(--fl-dimmer); }
+  .fx-gen-err { font-size: 11px; line-height: 1.7; color: rgba(201, 119, 106, .95); }
+  .fx-gen-tag {
+    font-style: normal; text-decoration: none;
+    font-size: 9px; letter-spacing: 1px; padding: 1px 5px; border-radius: 2px;
+    color: var(--fl-accent); border: 1px solid rgba(var(--fl-accent-rgb), .35);
+  }
+
+  /* ---- 快讯 ---- */
+  .fx-news { border: 1px solid var(--fl-line); border-radius: 2px; overflow: hidden; }
+  .fx-news-h {
+    display: flex; align-items: baseline; gap: 9px; cursor: pointer;
+    padding: 9px 13px; background: rgba(var(--fl-accent-rgb), .03);
+  }
+  .fx-news-h b { font-size: 11px; font-weight: 500; letter-spacing: 2.4px; color: var(--fl-dim); }
+  .fx-news-h i { font-style: normal; font-size: 10px; color: var(--fl-dimmer); }
+  .fx-news-h s { text-decoration: none; margin-left: auto; font-size: 10px; color: var(--fl-dimmer); }
+  .fx-news-h:hover s { color: var(--fl-accent); }
+  .fx-news-b { padding: 0; }
+  .fx-news-i { padding: 9px 13px; border-top: 1px solid var(--fl-line); }
+  .fx-news-t { font-size: 12.5px; color: rgba(var(--fl-text-rgb), .9); letter-spacing: .4px; }
+  .fx-news-at { font-size: 9.5px; color: var(--fl-dimmer); letter-spacing: .8px; margin-top: 2px; }
+  .fx-news-x { font-size: 11.5px; line-height: 1.7; color: rgba(var(--fl-text-rgb), .6); margin-top: 4px; }
+  .fx-news-e { font-size: 10.5px; color: var(--fl-accent); margin-top: 4px; }
+
+  /* ---- 本期周期 ---- */
+  .fx-period-p { font-style: normal; margin-left: auto; font-size: 10.5px; color: var(--fl-dimmer); }
+
   /* ---- 空态 ---- */
   .fx-empty {
     display: flex; flex-direction: column; align-items: center; gap: 9px;

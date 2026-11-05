@@ -5394,14 +5394,54 @@
     // 每次渲染都刷一遍领地上下文：合成/自创要知道是哪块地、多大规模
     if (typeof mod.setContext === 'function') {
       const d = currentDomain();
+      const info = (d && d.info) || {};
       try {
+        /* 在建工程：<fief_build> 里的前几项，生成国策树时当素材 */
+        const builds = (data.plans || [])
+          .slice(0, 6)
+          .map((x) => String(x.名 || '').trim())
+          .filter(Boolean);
+
+        /* 待决政务：最近一期结算里挂着的事 */
+        const todo = [];
+        try {
+          const r = data.reports && data.reports.last;
+          if (r && r.待决) {
+            const t = String(r.待决.事 || r.待决 || '').trim();
+            if (t) todo.push(t.slice(0, 60));
+          }
+        } catch (e2) { /* 忽略 */ }
+
+        /* 档位参考：让模型知道这块地该干多大的事 */
+        const scale = (d && d.规模档) || info.规模 || '';
+        const tier = (typeof TIERS !== 'undefined' ? TIERS : []).find((t) => t.name === scale);
+        const tierNote = tier
+          ? (tier.value + '　建筑槽 ' + tier.slot + '　基础月结余 ' + tier.base)
+          : '';
+
+        const govName = (d && d.gov && (d.gov.名称 || d.gov.name || d.gov.政体)) || '';
+
         mod.setContext({
           domain: d ? d.name : '',
           faction: (d && d.meta && d.meta.势力) || '',
-          scale: (d && d.规模档) || (d && d.info && d.info.规模) || '',
-          pop: (d && d.info && d.info.人口) || '',
-          treasury: (d && d.info && d.info.金库) || '',
+          scale,
+          pop: info.人口 || '',
+          treasury: info.金库 || '',
+          gov: String(govName),
+          situation: String(info.描述正文 || '').slice(0, 200),
+          builds,
+          todo,
+          tierNote,
         });
+      } catch (e) { /* 忽略 */ }
+    }
+
+    /* 结算周期变了就推一期国策：进行中的焦点扣天数 */
+    if (typeof mod.setPeriod === 'function') {
+      try {
+        const r = data.reports && data.reports.last;
+        const doneNow = mod.setPeriod(r ? r.周期 : '');
+        if (doneNow) toast('本期有 ' + doneNow + ' 项国策完成');
       } catch (e) { /* 忽略 */ }
     }
     // 换聊天之后进度要跟着换，这里同步一次

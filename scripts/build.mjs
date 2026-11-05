@@ -33,6 +33,7 @@ const MANIFEST = [
   { path: 'modules/diplo.ui.js', desc: '外交页逻辑' },
   { path: 'modules/prompts/diplomacy.js', desc: '外交提示词' },
   { path: 'modules/prompts/policy.js', desc: '政策提示词' },
+  { path: 'modules/prompts/focus.js', desc: '国策提示词' },
   { path: 'modules/focus.data.js', desc: '国策树数据' },
   { path: 'modules/focus.css.js', desc: '国策树样式' },
   { path: 'modules/focus.ui.js', desc: '国策树界面' },

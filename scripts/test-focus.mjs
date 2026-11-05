@@ -35,9 +35,11 @@ sb.window = sb;
 vm.createContext(sb);
 vm.runInContext(fs.readFileSync(ROOT + '/modules/focus.data.js', 'utf8'), sb, { filename: 'focus.data.js' });
 vm.runInContext(fs.readFileSync(ROOT + '/modules/focus.ui.js', 'utf8'), sb, { filename: 'focus.ui.js' });
+vm.runInContext(fs.readFileSync(ROOT + '/modules/prompts/focus.js', 'utf8'), sb, { filename: 'prompts/focus.js' });
 
 const DATA = sb.__fiefFocusData;
 const UI = sb.__fiefFocusUI;
+const FAI = sb.__fiefFocusAI;
 
 ok('国策数据加载', !!DATA);
 ok('国家数 10', DATA.countries.length === 10, DATA.countries.length);
@@ -225,6 +227,142 @@ for (const c of DATA.countries) {
   }
 }
 ok('每国根节点都可推进（或仅缺条件）', badReady.length === 0, badReady.slice(0, 3).join(', '));
+
+/* ---------- 8. 时间推进 ---------- */
+console.log('\n=== 8. 时间推进 ===');
+T.setCountry('奥古斯提姆帝国');
+T.setDone([]);
+T.setRunning({});
+T.setNews([]);
+T.setPeriodRaw('本年三月');
+
+T.setRunning({ supply_directorate: { left: 14, from: '本年三月' } });
+ok('进行中的焦点状态是 running',
+  T.stateOf(T.tree(), T.tree().nodes.find((n) => n.id === 'supply_directorate')) === 'running');
+
+/* 一期 30 天，14 天的活应该直接完成 */
+const fin1 = T.tick(30);
+ok('过一期后完成 1 项', fin1 === 1, fin1);
+ok('完成状态落到 done', T.done().indexOf('supply_directorate') >= 0, T.done().join(','));
+ok('进行中列表已清空', Object.keys(T.running()).length === 0, JSON.stringify(T.running()));
+ok('自动落了一条快讯', T.news().length === 1, T.news().length);
+ok('快讯带焦点名', T.news()[0] && T.news()[0].title === '设立帝国军需总署', T.news()[0] && T.news()[0].title);
+ok('快讯带周期', T.news()[0] && T.news()[0].at === '本年三月', T.news()[0] && T.news()[0].at);
+
+/* 长工期不会被一期扣完 */
+T.setDone([]);
+T.setRunning({ chiyuan_trial: { left: 90, from: '本年三月' } });
+const fin2 = T.tick(30);
+ok('90 天的活过一期没完成', fin2 === 0, fin2);
+ok('剩余天数扣到 60', T.running().chiyuan_trial.left === 60, T.running().chiyuan_trial.left);
+
+/* ---------- 9. setPeriod ---------- */
+console.log('\n=== 9. 结算周期驱动 ===');
+T.setPeriodRaw('');
+const r1 = UI.setPeriod('本年三月');
+ok('第一次设周期只记录，不推进', r1 === 0, r1);
+
+T.setRunning({ chiyuan_trial: { left: 40, from: '本年三月' } });
+const r2 = UI.setPeriod('本年四月');
+ok('换期后推一期', T.running().chiyuan_trial.left === 10, T.running().chiyuan_trial.left);
+
+const r3 = UI.setPeriod('本年四月');
+ok('同一期重复设不重复推', T.running().chiyuan_trial.left === 10, T.running().chiyuan_trial.left);
+
+const r4 = UI.setPeriod('本年五月');
+ok('再换一期扣到完成', r4 === 1, r4);
+ok('完成后进 done', T.done().indexOf('chiyuan_trial') >= 0, T.done().join(','));
+
+/* ---------- 10. 自定义树 ---------- */
+console.log('\n=== 10. 领地自造树 ===');
+const fakeTree = {
+  id: '灰冠领', name: '灰冠领', _generated: true,
+  stability: 58, warSupport: 42,
+  periodTitle: '先稳边再通商', agenda: '测一下能不能挂上去',
+  longTerm: [], branches: [{ id: 'b1', name: '固边', purpose: '先稳住', core: true }],
+  capabilities: [], relations: [], historical: [],
+  nodes: [
+    { id: 'n1', name: '编练乡勇', branch: '固边', days: 20, prerequisites: [], requirements: [], effects: [], investments: [] },
+    { id: 'n2', name: '修堡', branch: '固边', days: 40, prerequisites: [['n1']], requirements: [], effects: [], investments: [] },
+  ],
+};
+T.setTrees({ 灰冠领: fakeTree });
+const ids2 = T.allCountryIds();
+ok('自造树进了国名列表', ids2.indexOf('灰冠领') >= 0, ids2.length + ' 个');
+
+T.setCountry('灰冠领');
+T.setDone([]);
+T.setRunning({});
+const selfTree = T.tree();
+ok('能取到自造树', !!selfTree && selfTree.name === '灰冠领', selfTree && selfTree.name);
+const hs = T.html();
+ok('自造树能渲染', /编练乡勇/.test(hs) && /修堡/.test(hs));
+ok('自造树有 AI 生成标记', /AI 生成/.test(hs));
+
+/* ---------- 11. 生成提示词的校验 ---------- */
+console.log('\n=== 11. 生成树的校验 ===');
+ok('提示词模块加载', !!FAI);
+ok('系统提示词有输出格式', /"nodes"/.test(FAI.system));
+
+const goodRaw = {
+  name: '灰冠领',
+  description: '边地小领',
+  stability: 58, warSupport: 42,
+  periodTitle: '先稳边',
+  agenda: '先把边稳住',
+  longTerm: [{ id: 'lt1', text: '让商队愿意常驻' }],
+  branches: [{ id: 'b1', name: '固边', purpose: '稳边', core: true }],
+  capabilities: [{ id: 'cap1', name: '乡勇名册', active: true, reason: '已有团练' }],
+  nodes: [
+    { id: 'n1', name: '编练乡勇', branch: '固边', days: 20, prerequisites: [], requirements: [], effects: [{ kind: 'stability', value: 3 }] },
+    { id: 'n2', name: '修堡', branch: '固边', days: 40, prerequisites: [['n1']], requirements: [], effects: [{ kind: 'warSupport', value: 5 }] },
+    { id: 'n3', name: '开市', branch: '固边', days: 30, prerequisites: [['n2']], requirements: [], effects: [] },
+    { id: 'n4', name: '通商路', branch: '固边', days: 25, prerequisites: [['n3']], requirements: [], effects: [] },
+    { id: 'n5', name: '设税卡', branch: '固边', days: 15, prerequisites: [['n4']], requirements: [], effects: [] },
+    { id: 'n6', name: '立乡约', branch: '固边', days: 10, prerequisites: [['n5']], requirements: [], effects: [] },
+  ],
+};
+let normOk = null, normErr = null;
+try { normOk = FAI.normalize(goodRaw); } catch (e) { normErr = e.message; }
+ok('合法树能通过校验', !!normOk && !normErr, normErr);
+ok('节点数保留', normOk && normOk.nodes.length === 6, normOk && normOk.nodes.length);
+ok('标记为生成物', normOk && normOk._generated === true);
+ok('分支自动补齐 core', normOk && normOk.branches[0].core === true);
+
+/* 节点太少 */
+let tooFew = null;
+try { FAI.normalize(Object.assign({}, goodRaw, { nodes: goodRaw.nodes.slice(0, 2) })); } catch (e) { tooFew = e.message; }
+ok('节点太少会报错', !!tooFew, tooFew);
+
+/* 没有起点：让所有节点首尾相接成环，每个都有前置（自引用会被过滤，所以用环形） */
+let noRoot = null;
+try {
+  const bad = JSON.parse(JSON.stringify(goodRaw));
+  bad.nodes.forEach((n, i) => {
+    n.prerequisites = [[bad.nodes[(i + 1) % bad.nodes.length].id]];
+  });
+  FAI.normalize(bad);
+} catch (e) { noRoot = e.message; }
+ok('没有起点会报错', !!noRoot, noRoot);
+
+/* 悬空前置被过滤掉 */
+const danglingPre = JSON.parse(JSON.stringify(goodRaw));
+danglingPre.nodes[1].prerequisites = [['不存在的节点']];
+const nd = FAI.normalize(danglingPre);
+ok('悬空前置被丢掉', nd.nodes[1].prerequisites.length === 0, JSON.stringify(nd.nodes[1].prerequisites));
+
+/* 非法效果被丢弃 */
+const badEff = JSON.parse(JSON.stringify(goodRaw));
+badEff.nodes[0].effects = [{ kind: '税收百分比', value: 10 }, { kind: 'stability', value: 999 }];
+const ne = FAI.normalize(badEff);
+ok('非法 kind 被丢弃', ne.nodes[0].effects.length === 1, JSON.stringify(ne.nodes[0].effects));
+ok('越界数值被夹住', ne.nodes[0].effects[0].value === 20, ne.nodes[0].effects[0].value);
+
+/* 单条互斥会被清掉 */
+const singleMutex = JSON.parse(JSON.stringify(goodRaw));
+singleMutex.nodes[0].mutex = { group: 'g1', route: 'a', lock: 'start', reason: '测试' };
+const nm = FAI.normalize(singleMutex);
+ok('只有一条的互斥组被清空', nm.nodes[0].mutex === null, JSON.stringify(nm.nodes[0].mutex));
 
 console.log('\n' + (fail ? fail + ' 项失败  ' : '全部通过 ✔  ') + (pass + fail) + ' 项');
 process.exit(fail ? 1 : 0);
