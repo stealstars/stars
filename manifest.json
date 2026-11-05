@@ -1,7 +1,7 @@
 {
   "name": "fief-ledger",
   "displayName": "领地档案",
-  "version": "0.9.67",
+  "version": "0.9.68",
   "channel": "stable",
   "schemaVersion": 1,
   "loaderMin": "0.1.0",
@@ -11,7 +11,7 @@
     "sha256": "dbda3c6914b46bb1470130bd65e0edd79abedd15e5bdf969a74a110756b00cd4"
   },
   "moduleCount": 17,
-  "totalBytes": 867301,
+  "totalBytes": 870698,
   "modules": [
     {
       "path": "modules/worldbook.js",
@@ -34,8 +34,8 @@
     {
       "path": "modules/policy.ui.js",
       "desc": "政令抽卡界面",
-      "bytes": 29361,
-      "sha256": "1dc52e29093b3e7ef5b96db777611bcf0231aeb9f4c9d4bf4839c800409b0cb5"
+      "bytes": 29542,
+      "sha256": "1ba43c640e840f36cc68aacd31349a8a20aef74fcf22659b5e2950a4685c340f"
     },
     {
       "path": "modules/ai.css.js",
@@ -94,14 +94,14 @@
     {
       "path": "modules/focus.css.js",
       "desc": "国策树样式",
-      "bytes": 12268,
-      "sha256": "0fa98dfe847e54e3e02cc22e91f28b212a85ec5934cb8a44e7c1e1639a40bee8"
+      "bytes": 12451,
+      "sha256": "80d1c5291a93b6b2ffc3479ea609bc3f89396f68ddf82ad5d427697bb66f4b9b"
     },
     {
       "path": "modules/focus.ui.js",
       "desc": "国策树界面",
-      "bytes": 25478,
-      "sha256": "30899b22f16a670404f0dd93812474c5544a9a5cf3a4f4d8df833ae0171ee9c7"
+      "bytes": 28427,
+      "sha256": "d4d42876a4a843ffb5d3d6acadc0972606266865dfcbd8526d1ab8a061210bfa"
     },
     {
       "path": "modules/gov.js",
@@ -112,8 +112,8 @@
     {
       "path": "modules/core.js",
       "desc": "主脚本",
-      "bytes": 261740,
-      "sha256": "753e69b5baaf06dca562de05b4d037ba809573c73c58173be38560e5dcf81ab0"
+      "bytes": 261824,
+      "sha256": "e284ba88f2c9832f8340deef9df776ab70378708625ba81f49a820fe513eddc5"
     }
   ]
 }
