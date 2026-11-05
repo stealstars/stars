@@ -171,7 +171,7 @@ manifest 里也记了 `loader: { version, sha256 }`，`test-version-lock.mjs` �
 ### 版本号只有一个源头
 
 ```
-package.json  第 3 行  "version": "0.9.68"     ← 只有这里是真的
+package.json  第 2 行  "version": "0.9.69"     ← 打开文件第一眼就是它
 ```
 
 其余全是生成物或另一回事，**别手改**：
@@ -190,7 +190,7 @@ node scripts/build.mjs --bump     # 末位 +1，写回 package.json
 node scripts/publish.mjs          # 默认就 bump，一路推到线上
 ```
 
-想跳到指定版本（比如从 0.9.68 直接到 0.10.0），就手动改 `package.json` 第 3 行，
+想跳到指定版本（比如从 0.9.68 直接到 0.10.0），就手动改 `package.json` 第 2 行，
 然后 `node scripts/publish.mjs --no-bump`。
 
 ### 改代码的顺序
