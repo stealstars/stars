@@ -87,31 +87,50 @@ ok('MANIFEST_KEY 按版本区分', /const MANIFEST_KEY = TARGET_VERSION \? \('__
 ok('reload 清的是当前版本的键', /c\.delete\(MANIFEST_KEY\)/.test(SRC));
 
 /* ---------- 5. 线上 tag 真的能用（发布后才有） ---------- */
+/* jsDelivr 国内会随机 ECONNRESET，重试几次再判定 */
+async function get(url, tries = 3) {
+  let last = null;
+  for (let i = 0; i < tries; i += 1) {
+    try {
+      const r = await fetch(url, { headers: { 'User-Agent': 'n', 'Cache-Control': 'no-cache' } });
+      if (r.ok) return { ok: true, res: r };
+      last = 'HTTP ' + r.status;
+    } catch (e) {
+      last = (e.cause && (e.cause.code || e.cause.message)) || e.message;
+    }
+    await new Promise((r) => setTimeout(r, 600));
+  }
+  return { ok: false, err: last };
+}
+
 console.log('\n=== 5. 线上 tag 可取 ===');
 const VER = JSON.parse(fs.readFileSync('D:/223/fief-ledger/manifest.json', 'utf8')).version;
 const tag = 'v' + VER;
-let tagOk = false;
-try {
-  const r = await fetch('https://raw.githubusercontent.com/stealstars/stars/' + tag + '/manifest.json',
-    { headers: { 'User-Agent': 'n', 'Cache-Control': 'no-cache' } });
-  if (r.ok) {
-    const j = await r.json();
-    tagOk = j.version === VER;
-    ok('raw 上 ' + tag + ' 的 manifest 版本对得上', tagOk, j.version + ' ≠ ' + VER);
-  } else {
-    ok('raw 上 ' + tag + ' 存在', false, 'HTTP ' + r.status);
-  }
-} catch (e) {
-  ok('raw 上 ' + tag + ' 可取', false, e.message);
+
+const rawRes = await get('https://raw.githubusercontent.com/stealstars/stars/' + tag + '/manifest.json');
+if (rawRes.ok) {
+  const j = await rawRes.res.json();
+  ok('raw 上 ' + tag + ' 的 manifest 版本对得上', j.version === VER, j.version + ' ≠ ' + VER);
+} else {
+  ok('raw 上 ' + tag + ' 可取', false, rawRes.err);
 }
 
-try {
-  const r = await fetch('https://cdn.jsdelivr.net/gh/stealstars/stars@' + tag + '/manifest.json',
-    { headers: { 'Cache-Control': 'no-cache' } });
-  ok('jsDelivr 上 @' + tag + ' 可取', r.ok, 'HTTP ' + r.status);
-} catch (e) {
-  ok('jsDelivr 上 @' + tag + ' 可取', false, e.message);
+const cdnRes = await get('https://cdn.jsdelivr.net/gh/stealstars/stars@' + tag + '/manifest.json');
+let cdnOk = false;
+if (cdnRes.ok) {
+  const j = await cdnRes.res.json();
+  cdnOk = j.version === VER;
+  ok('jsDelivr 上 @' + tag + ' 可取', true);
+  ok('jsDelivr 版本对得上', cdnOk, j.version + ' ≠ ' + VER);
+} else {
+  /* jsDelivr 在国内会随机不通。loader 是双源竞速，raw 能用就够了，
+     所以这里只提示不判失败——否则测试会因为网络抖动天天红。 */
+  console.log('  ..   jsDelivr 本地不通（' + cdnRes.err + '），loader 双源竞速，不影响');
 }
+
+ok('至少一个源能拿到 tag ' + tag,
+  (rawRes.ok) || cdnOk,
+  'raw=' + (rawRes.ok ? 'ok' : rawRes.err) + ' jsdelivr=' + (cdnOk ? 'ok' : cdnRes.err));
 
 console.log('\n' + (fail ? fail + ' 项失败  ' : '全部通过 ✔  ') + (pass + fail) + ' 项');
 process.exit(fail ? 1 : 0);
