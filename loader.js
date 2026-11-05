@@ -59,7 +59,7 @@
    * 自更新只是「这次运行用新版」——酒馆里存的那份还是旧的，但它会一直自我更新，
    * 所以再也不用动导入。等哪天想彻底同步，再导一次即可。
    */
-  const LOADER_VERSION = '2';
+  const LOADER_VERSION = '3';
 
   const state = {
     disposed: false,
