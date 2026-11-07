@@ -439,5 +439,28 @@ ok('空白模板能直接导入', T.doImport() === true);
 ok('导入后切到新树', !!T.tree() && T.tree().name === '我的领地', T.tree() && T.tree().name);
 ok('导入的树能渲染', /编练乡勇/.test(T.html()));
 
+/* ---------- 16. 树级信息 ---------- */
+console.log('\n=== 16. 树级信息 ===');
+T.setCountry('奥古斯提姆帝国');
+T.setDone([]);
+T.setSel(null);
+T.setBrief(false);
+const hb1 = T.html();
+ok('局势区在', /局 势/.test(hb1));
+ok('收起时不出推演', !/局势推演/.test(hb1));
+T.setBrief(true);
+const hb2 = T.html();
+ok('展开后有局势推演', /局势推演/.test(hb2));
+ok('展开后有长期目标', /长期目标/.test(hb2));
+ok('展开后有已有能力', /已有能力/.test(hb2));
+ok('展开后有焦点关系', /焦点关系/.test(hb2));
+ok('展开后有世界书出处', /世界书出处/.test(hb2));
+ok('展开后内容明显变多', hb2.length > hb1.length * 1.3, hb1.length + ' → ' + hb2.length);
+ok('分支有支持者', /支持/.test(hb2));
+ok('分支有反对者', /反对/.test(hb2));
+ok('分支有代价', /代价/.test(hb2));
+ok('分支有终点', /终点/.test(hb2));
+T.setBrief(false);
+
 console.log('\n' + (fail ? fail + ' 项失败  ' : '全部通过 ✔  ') + (pass + fail) + ' 项');
 process.exit(fail ? 1 : 0);

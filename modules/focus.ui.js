@@ -50,6 +50,7 @@
   let impOpen = false;           // 导入 / 手写面板展开着没
   let impText = '';              // 输入框里的 JSON
   let impErr = '';               // 导入失败的原因
+  let briefOpen = false;         // 局势推演那块展开着没
 
   /* ------------------------------------------------------------ 存取 */
   function storeKey() { return LS_PREFIX + (chatId || 'default'); }
@@ -511,6 +512,15 @@
       + '<i>' + cnt + ' / ' + mine.length + '</i>'
       + '</div>'
       + (b.purpose ? '<div class="fx-branch-h"><em>' + escFn(b.purpose) + '</em></div>' : '')
+      /* 谁推、谁挡、要付什么代价——国策的张力全在这三行里 */
+      + ((b.supporters || b.opposition || b.tradeoff)
+        ? '<div class="fx-branch-x">'
+          + (b.supporters ? '<span class="sup"><k>支持</k>' + escFn(b.supporters) + '</span>' : '')
+          + (b.opposition ? '<span class="opp"><k>反对</k>' + escFn(b.opposition) + '</span>' : '')
+          + (b.tradeoff ? '<span class="tog"><k>代价</k>' + escFn(b.tradeoff) + '</span>' : '')
+          + '</div>'
+        : '')
+      + (b.destination ? '<div class="fx-branch-h"><em>终点　' + escFn(b.destination) + '</em></div>' : '')
       + '<div class="fx-cols">' + cols + '</div>'
       + '</div>';
   }
@@ -523,6 +533,66 @@
       else if (e.kind === 'stability') out.push('稳定 ' + (e.value > 0 ? '+' : '') + e.value);
       else if (e.kind === 'warSupport') out.push('战争支持 ' + (e.value > 0 ? '+' : '') + e.value);
     }
+    return out;
+  }
+
+  /* ------------------------------------------------------------ 局势 */
+  /**
+   * 树级信息：参考数据里每个国家都带着描述、局势推演、长期目标、
+   * 已有能力、焦点关系、历史、世界书出处，全都有，只是以前没往界面上放。
+   */
+  function briefHtml(tr) {
+    const has = tr.description || tr.analysis || (tr.longTerm || []).length
+      || (tr.capabilities || []).length || (tr.relations || []).length
+      || (tr.historical || []).length || tr.evidence;
+    if (!has) return '';
+
+    const nm = (id) => {
+      const n = (tr.nodes || []).find((x) => x.id === id);
+      return n ? n.name : id;
+    };
+
+    let out = '<div class="fx-brief">';
+    out += '<div class="fx-brief-h" data-brief="1">'
+      + '<b>局 势</b>'
+      + '<i>' + (briefOpen ? '收起' : '推演 · 目标 · 能力 · 关系') + '</i>'
+      + '</div>';
+
+    if (tr.description) out += '<div class="fx-brief-tx">' + escFn(tr.description) + '</div>';
+
+    if (briefOpen) {
+      if (tr.analysis) {
+        out += '<div class="fx-brief-sec"><k>局势推演</k><p>' + escFn(tr.analysis) + '</p></div>';
+      }
+      if ((tr.longTerm || []).length) {
+        out += '<div class="fx-brief-sec"><k>长期目标</k><ul>'
+          + tr.longTerm.map((x) => '<li>' + escFn(x && x.text ? x.text : x) + '</li>').join('')
+          + '</ul></div>';
+      }
+      if ((tr.capabilities || []).length) {
+        out += '<div class="fx-brief-sec"><k>已有能力</k><ul>'
+          + tr.capabilities.map((c) => '<li class="' + (c.active ? 'on' : '') + '">'
+            + escFn(c.name) + (c.reason ? '<s>' + escFn(c.reason) + '</s>' : '') + '</li>').join('')
+          + '</ul></div>';
+      }
+      if ((tr.relations || []).length) {
+        out += '<div class="fx-brief-sec"><k>焦点关系</k><ul>'
+          + tr.relations.map((r) => '<li>' + escFn(nm(r.from)) + ' → ' + escFn(nm(r.to))
+            + (r.kind ? '　<i>' + escFn(r.kind) + '</i>' : '')
+            + (r.change ? '<s>' + escFn(r.change) + '</s>' : '') + '</li>').join('')
+          + '</ul></div>';
+      }
+      if ((tr.historical || []).length) {
+        out += '<div class="fx-brief-sec"><k>历史</k><ul>'
+          + tr.historical.map((x) => '<li>' + escFn(x && x.text ? x.text : x) + '</li>').join('')
+          + '</ul></div>';
+      }
+      if (tr.evidence) {
+        out += '<div class="fx-brief-sec"><k>世界书出处</k><p>' + escFn(tr.evidence) + '</p></div>';
+      }
+    }
+
+    out += '</div>';
     return out;
   }
 
@@ -549,6 +619,7 @@
       + '<b>' + escFn(n.name) + '</b>'
       + '<u>' + escFn(n.branch || '') + '</u>'
       + '<u>' + escFn(stName) + '</u>'
+      + (n.impact === 'pivotal' ? '<u class="fx-d-piv">关键</u>' : '')
       + '<s data-close="1" title="收起">✕</s>'
       + '</div>';
 
@@ -581,6 +652,21 @@
     }
     if (n.reason) {
       out += '<div class="fx-d-row"><k>依据</k><v>' + escFn(n.reason) + '</v></div>';
+    }
+
+    /* 参考数据里这几个字段以前一直没显示，等于把大半内容丢了 */
+    const txt = (x) => (x && typeof x === 'object' ? (x.text || x.label || x.name || '') : x);
+    if ((n.sustain || []).length) {
+      out += '<div class="fx-d-row"><k>维持</k><v>'
+        + n.sustain.map((x) => escFn(txt(x))).filter(Boolean).join('、') + '</v></div>';
+    }
+    if ((n.outcomes || []).length) {
+      out += '<div class="fx-d-row"><k>结果</k><v>'
+        + n.outcomes.map((x) => escFn(txt(x))).filter(Boolean).join('、') + '</v></div>';
+    }
+    if (n.news) {
+      out += '<div class="fx-d-row"><k>快讯</k><v>'
+        + escFn(typeof n.news === 'string' ? n.news : txt(n.news)) + '</v></div>';
     }
 
     if (n.mutex && n.mutex.reason) {
@@ -733,6 +819,8 @@
       out += '</div>';
     }
 
+    out += briefHtml(tr);
+
     out += '<div class="fx-prog">'
       + '<span class="fx-prog-t">进 度</span>'
       + '<span class="fx-prog-bar"><i style="width:' + pct + '%"></i></span>'
@@ -796,6 +884,9 @@
 
     const oa = q('[data-openall]');
     if (oa) oa.addEventListener('click', () => { openAll = !openAll; repaint(rootEl); });
+
+    const br = q('[data-brief]');
+    if (br) br.addEventListener('click', () => { briefOpen = !briefOpen; repaint(rootEl); });
 
     const cl = q('[data-close]');
     if (cl) cl.addEventListener('click', () => { sel = null; repaint(rootEl); });
@@ -962,6 +1053,7 @@
       setPeriodRaw(p) { lastPeriod = p || ''; },
       setSel(id) { sel = id; },
       setImpText(v) { impText = v || ''; },
+      setBrief(v) { briefOpen = !!v; },
       doImport,
       impErr: () => impErr,
       done: () => Array.from(done),

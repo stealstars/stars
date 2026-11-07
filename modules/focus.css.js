@@ -259,6 +259,72 @@
   .fx-d-note b { color: rgba(201, 119, 106, .95); font-weight: 400; }
 
   /* ---- 生成树 ---- */
+  /* 分支的张力：谁推、谁挡、代价、终点 */
+  .fx-branch-x { display: flex; flex-direction: column; gap: 3px; margin-top: 7px; }
+  .fx-branch-x span {
+    font-size: calc(10.5px * var(--fl-fs, 1));
+    line-height: 1.72; color: var(--fl-dim);
+  }
+  .fx-branch-x k {
+    display: inline-block; min-width: 32px; margin-right: 4px;
+    font-size: calc(9.5px * var(--fl-fs, 1));
+    letter-spacing: 1.4px; color: var(--fl-dimmer);
+  }
+  .fx-branch-x .sup k { color: rgba(143, 191, 122, .95); }
+  .fx-branch-x .opp k { color: rgba(201, 119, 106, .95); }
+
+  /* 局势：树级信息。默认只放一句描述，展开才出推演 / 目标 / 能力 / 关系 */
+  .fx-brief {
+    border: 1px solid var(--fl-line);
+    border-left: 2px solid rgba(var(--fl-accent-rgb), .45);
+    border-radius: 2px;
+    background: var(--fl-surface);
+    padding: 10px 12px;
+  }
+  .fx-brief-h { display: flex; align-items: baseline; gap: 9px; cursor: pointer; user-select: none; }
+  .fx-brief-h b {
+    font-size: calc(12.5px * var(--fl-fs, 1));
+    letter-spacing: 3px; color: var(--fl-accent); font-weight: 600;
+  }
+  .fx-brief-h i {
+    font-style: normal;
+    font-size: calc(10px * var(--fl-fs, 1));
+    letter-spacing: .8px; color: var(--fl-dimmer);
+  }
+  .fx-brief-h:hover i { color: var(--fl-dim); }
+  .fx-brief-tx {
+    margin-top: 7px;
+    font-size: calc(11.5px * var(--fl-fs, 1));
+    line-height: 1.85; color: var(--fl-dim);
+  }
+  .fx-brief-sec { margin-top: 11px; }
+  .fx-brief-sec k {
+    display: block;
+    font-size: calc(10px * var(--fl-fs, 1));
+    letter-spacing: 2.4px; color: var(--fl-dimmer);
+    margin-bottom: 5px;
+  }
+  .fx-brief-sec p {
+    margin: 0;
+    font-size: calc(11.5px * var(--fl-fs, 1));
+    line-height: 1.85; color: var(--fl-text);
+  }
+  .fx-brief-sec ul { margin: 0; padding-left: 15px; }
+  .fx-brief-sec li {
+    font-size: calc(11.5px * var(--fl-fs, 1));
+    line-height: 1.8; color: var(--fl-text);
+  }
+  .fx-brief-sec li s {
+    display: block; text-decoration: none;
+    font-size: calc(10.5px * var(--fl-fs, 1));
+    color: var(--fl-dimmer); line-height: 1.65;
+  }
+  .fx-brief-sec li i {
+    font-style: normal; color: var(--fl-accent);
+    font-size: calc(10px * var(--fl-fs, 1));
+  }
+  .fx-d-piv { color: var(--fl-accent) !important; }
+
   .fx-gen { display: flex; flex-direction: column; gap: 7px; padding-top: 2px; }
   .fx-gen-btn { align-self: flex-start; }
   .fx-gen-row { display: flex; gap: 8px; flex-wrap: wrap; }
