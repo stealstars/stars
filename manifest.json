@@ -1,7 +1,7 @@
 {
   "name": "fief-ledger",
   "displayName": "领地档案",
-  "version": "0.9.71",
+  "version": "0.9.72",
   "channel": "stable",
   "schemaVersion": 1,
   "loaderMin": "0.1.0",
@@ -11,7 +11,7 @@
     "sha256": "13cf0db86963399c66177b7c3855a8dcaa4ddceb8e6ec9fc9a18d120e717b85f"
   },
   "moduleCount": 17,
-  "totalBytes": 884473,
+  "totalBytes": 889496,
   "modules": [
     {
       "path": "modules/worldbook.js",
@@ -112,8 +112,8 @@
     {
       "path": "modules/core.js",
       "desc": "主脚本",
-      "bytes": 271759,
-      "sha256": "f038c92a5af5a087f73f197a635e6fba3c4ac75f3afdb8a2dcf6c53503dfb197"
+      "bytes": 276782,
+      "sha256": "a6e205b358c5fec054beebd6c485a235a3a3f5df148fbf61a4108c49be1e7e3a"
     }
   ]
 }
