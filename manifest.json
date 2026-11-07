@@ -1,17 +1,17 @@
 {
   "name": "fief-ledger",
   "displayName": "领地档案",
-  "version": "0.9.70",
+  "version": "0.9.71",
   "channel": "stable",
   "schemaVersion": 1,
   "loaderMin": "0.1.0",
-  "publishedAt": "2026-11-05",
+  "publishedAt": "2026-11-07",
   "loader": {
     "version": 5,
     "sha256": "13cf0db86963399c66177b7c3855a8dcaa4ddceb8e6ec9fc9a18d120e717b85f"
   },
   "moduleCount": 17,
-  "totalBytes": 870698,
+  "totalBytes": 884473,
   "modules": [
     {
       "path": "modules/worldbook.js",
@@ -28,8 +28,8 @@
     {
       "path": "modules/policy.css.js",
       "desc": "政令样式",
-      "bytes": 21877,
-      "sha256": "d49d257a9dc710eb59f89c9a74c2cb3c614256bf340158aae4ad17732a24f156"
+      "bytes": 22885,
+      "sha256": "f01c68deb0bebba29c0b2fdcb1245c764df5766a67fdcd72594fdd2a4bc44ea5"
     },
     {
       "path": "modules/policy.ui.js",
@@ -40,8 +40,8 @@
     {
       "path": "modules/ai.css.js",
       "desc": "AI 面板样式",
-      "bytes": 14396,
-      "sha256": "46f6158dc71083a7765601ba169e480d845d5277cb5a68f48383b8b0873aa996"
+      "bytes": 15476,
+      "sha256": "8e00437bd8bdf3cb15bdc7a0f826395f7381d670ffd5471f408e82dc67c06916"
     },
     {
       "path": "modules/ai.chan.js",
@@ -58,8 +58,8 @@
     {
       "path": "modules/diplo.css.js",
       "desc": "外交页样式",
-      "bytes": 11036,
-      "sha256": "ab36e35cfe988c575ac385e0c4afaaf278386349f8a2002672eec6c2d1b3764b"
+      "bytes": 11876,
+      "sha256": "e58416d74a559f92c8a368c87731fd5da3a4fdbf870c9872788b9374cbc3a3b4"
     },
     {
       "path": "modules/diplo.ui.js",
@@ -94,8 +94,8 @@
     {
       "path": "modules/focus.css.js",
       "desc": "国策树样式",
-      "bytes": 12451,
-      "sha256": "80d1c5291a93b6b2ffc3479ea609bc3f89396f68ddf82ad5d427697bb66f4b9b"
+      "bytes": 13363,
+      "sha256": "01ca0b78abb05c462683b04733e55eb94a3f45aa4d23a39d3ec61420861840b7"
     },
     {
       "path": "modules/focus.ui.js",
@@ -112,8 +112,8 @@
     {
       "path": "modules/core.js",
       "desc": "主脚本",
-      "bytes": 261824,
-      "sha256": "e284ba88f2c9832f8340deef9df776ab70378708625ba81f49a820fe513eddc5"
+      "bytes": 271759,
+      "sha256": "f038c92a5af5a087f73f197a635e6fba3c4ac75f3afdb8a2dcf6c53503dfb197"
     }
   ]
 }
