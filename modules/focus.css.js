@@ -261,6 +261,28 @@
   /* ---- 生成树 ---- */
   .fx-gen { display: flex; flex-direction: column; gap: 7px; padding-top: 2px; }
   .fx-gen-btn { align-self: flex-start; }
+  .fx-gen-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .fx-gen-row .fx-gen-btn { align-self: auto; }
+
+  /* 导入 / 手写：输入框用实底，不用半透明，暗底上看得清 */
+  .fx-imp { display: flex; flex-direction: column; gap: 8px; margin-top: 3px; }
+  .fx-imp-ta {
+    width: 100%; min-height: 180px; resize: vertical;
+    box-sizing: border-box;
+    font-family: ui-monospace, Menlo, Consolas, "Courier New", monospace;
+    font-size: calc(11.5px * var(--fl-fs, 1));
+    line-height: 1.65;
+    color: var(--fl-text);
+    background: var(--fl-bg2);
+    border: 1px solid var(--fl-line2);
+    border-radius: 2px;
+    padding: 9px 10px;
+    outline: none;
+    -webkit-appearance: none;
+  }
+  .fx-imp-ta::placeholder { color: var(--fl-dimmer); }
+  .fx-imp-ta:focus { border-color: var(--fl-accent); }
+  .fx-imp-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .fx-gen-note { font-size: calc(10.5px * var(--fl-fs, 1)); line-height: 1.7; color: var(--fl-dimmer); }
   .fx-gen-err { font-size: calc(11px * var(--fl-fs, 1)); line-height: 1.7; color: rgba(201, 119, 106, .95); }
   .fx-gen-link {

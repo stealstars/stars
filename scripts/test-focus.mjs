@@ -408,5 +408,36 @@ UI.render(cacheEl);
 ok('内容没变时不重建 DOM', writes === w1, '多写了 ' + (writes - w1) + ' 次');
 ok('html() 幂等', T.html() === T.html());
 
+/* ---------- 15. 导入 / 手写 ---------- */
+console.log('\n=== 15. 导入 / 手写 ===');
+const tiny = {
+  name: '三节点小树',
+  nodes: [
+    { id: 'a', name: '甲', days: 10, prerequisites: [] },
+    { id: 'b', name: '乙', days: 20, prerequisites: [['a']] },
+    { id: 'c', name: '丙', days: 30, prerequisites: [['b'], ['不存在的']] },
+  ],
+};
+const ti = T.normalizeImport(tiny);
+ok('导入没有 6 节点门槛（3 个也收）', ti.nodes.length === 3, ti.nodes.length);
+ok('导入标记 _imported', ti._imported === true);
+ok('悬空前置被清掉', ti.nodes[2].prerequisites.length === 1
+  && ti.nodes[2].prerequisites[0].length === 1, JSON.stringify(ti.nodes[2].prerequisites));
+ok('缺 days 给默认 30',
+  T.normalizeImport({ name: 'x', nodes: [{ id: 'a', name: 'a' }] }).nodes[0].days === 30);
+
+let impNoNodes = null;
+try { T.normalizeImport({ name: 'x', nodes: [] }); } catch (e) { impNoNodes = e.message; }
+ok('nodes 空会报错', !!impNoNodes, impNoNodes);
+
+T.setImpText('{ 这不是 json');
+ok('非法 JSON 导入失败', T.doImport() === false);
+ok('失败有原因', /JSON/.test(T.impErr()), T.impErr());
+
+T.setImpText(T.TEMPLATE);
+ok('空白模板能直接导入', T.doImport() === true);
+ok('导入后切到新树', !!T.tree() && T.tree().name === '我的领地', T.tree() && T.tree().name);
+ok('导入的树能渲染', /编练乡勇/.test(T.html()));
+
 console.log('\n' + (fail ? fail + ' 项失败  ' : '全部通过 ✔  ') + (pass + fail) + ' 项');
 process.exit(fail ? 1 : 0);

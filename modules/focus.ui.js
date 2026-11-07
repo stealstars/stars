@@ -47,6 +47,9 @@
   let genErr = '';
   let ctx = {};                  // 领地实况，生成树时用
   let lastHtml = '';             // 上次渲染的 HTML，一样就不重建 DOM
+  let impOpen = false;           // 导入 / 手写面板展开着没
+  let impText = '';              // 输入框里的 JSON
+  let impErr = '';               // 导入失败的原因
 
   /* ------------------------------------------------------------ 存取 */
   function storeKey() { return LS_PREFIX + (chatId || 'default'); }
@@ -316,6 +319,110 @@
     } catch (e) { return false; }
   }
 
+  /* ------------------------------------------------------------ 导入 / 手写 */
+  /** 空白骨架：点一下填进输入框，改名字改天数就能用 */
+  const TEMPLATE = JSON.stringify({
+    name: '我的领地',
+    periodTitle: '第一期',
+    agenda: '先把边稳住，再谈通商',
+    stability: 50,
+    warSupport: 50,
+    branches: [{ id: 'b1', name: '固边', purpose: '先把边界稳住' }],
+    nodes: [
+      { id: 'n1', name: '编练乡勇', branch: '固边', days: 20, prerequisites: [], effects: [{ kind: 'stability', value: 3 }] },
+      { id: 'n2', name: '修堡', branch: '固边', days: 40, prerequisites: [['n1']], effects: [{ kind: 'warSupport', value: 5 }] },
+      { id: 'n3', name: '开市', branch: '固边', days: 30, prerequisites: [['n2']], effects: [{ kind: 'stability', value: 4 }] },
+    ],
+  }, null, 2);
+
+  /**
+   * 导入用的宽松校验：只要结构说得通就收，不像 AI 那套要求 6 个节点以上。
+   * 自己手写的树可以只有三五个焦点，也可以有十几个。
+   */
+  function normalizeImport(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('顶层得是一个对象');
+    const list = Array.isArray(raw.nodes) ? raw.nodes : [];
+    if (!list.length) throw new Error('nodes 是空的');
+
+    const seen = new Set();
+    const nodes = [];
+    for (const n of list) {
+      if (!n || typeof n !== 'object') continue;
+      const id = String(n.id || '').trim();
+      if (!id || seen.has(id)) continue;   // 没 id 或重复，直接跳
+      seen.add(id);
+      const days = Math.round(Number(n.days));
+      nodes.push({
+        id,
+        name: String(n.name || id).trim(),
+        branch: String(n.branch || '').trim(),
+        days: Number.isFinite(days) ? Math.max(1, Math.min(365, days)) : 30,
+        prerequisites: (Array.isArray(n.prerequisites) ? n.prerequisites : [])
+          .map((g) => (Array.isArray(g) ? g : [g]).map((x) => String(x).trim()).filter(Boolean))
+          .filter((g) => g.length),
+        effects: (Array.isArray(n.effects) ? n.effects : [])
+          .filter((e) => e && ['stability', 'warSupport', 'capability'].indexOf(e.kind) >= 0),
+        requirements: Array.isArray(n.requirements) ? n.requirements : [],
+        mutex: n.mutex && typeof n.mutex === 'object' ? n.mutex : null,
+      });
+    }
+    if (!nodes.length) throw new Error('没有一条能用的节点（id 是空的？）');
+
+    /* 悬空前置和自引用清掉，否则状态机永远算不到 ready */
+    for (const n of nodes) {
+      n.prerequisites = n.prerequisites
+        .map((g) => g.filter((x) => x !== n.id && seen.has(x)))
+        .filter((g) => g.length);
+    }
+
+    const name = String(raw.name || raw.id || '导入树').trim() || '导入树';
+    return {
+      id: name,
+      name,
+      _imported: true,
+      stability: Number.isFinite(Number(raw.stability)) ? Number(raw.stability) : 50,
+      warSupport: Number.isFinite(Number(raw.warSupport)) ? Number(raw.warSupport) : 50,
+      periodTitle: String(raw.periodTitle || ''),
+      agenda: String(raw.agenda || ''),
+      longTerm: Array.isArray(raw.longTerm) ? raw.longTerm : [],
+      branches: Array.isArray(raw.branches) ? raw.branches : [],
+      capabilities: Array.isArray(raw.capabilities) ? raw.capabilities : [],
+      relations: [],
+      historical: [],
+      nodes,
+    };
+  }
+
+  /** 把输入框里的 JSON 收成一棵树，成功就切过去 */
+  function doImport() {
+    let raw = null;
+    try {
+      raw = JSON.parse(String(impText || '').trim());
+    } catch (e) {
+      impErr = '不是合法 JSON：' + (e && e.message ? e.message : String(e));
+      return false;
+    }
+    let t = null;
+    try {
+      t = normalizeImport(raw);
+    } catch (e) {
+      impErr = '导入失败：' + (e && e.message ? e.message : String(e));
+      return false;
+    }
+    const key = t.name;
+    trees[key] = t;
+    countryId = key;
+    done = new Set();
+    running = new Map();
+    sel = null;
+    openAll = false;
+    impOpen = false;
+    impErr = '';
+    impText = '';
+    save();
+    return true;
+  }
+
   async function generate(rootEl) {
     const ai = window.__fiefAI;
     const FAI = window.__fiefFocusAI;
@@ -538,16 +645,34 @@
     if (genBusy) {
       out += '<div class="fx-gen-note">正在拟这棵树的稿…（十来个焦点，可能要几十秒）</div>';
     } else {
-      out += '<button class="fl-btn ghost fx-gen-btn" data-gen="1">＋ 给本领地生成国策树</button>';
+      out += '<div class="fx-gen-row">'
+        + '<button class="fl-btn ghost fx-gen-btn" data-gen="1">＋ AI 生成</button>'
+        + '<button class="fl-btn ghost fx-gen-btn" data-import="1">'
+        + (impOpen ? '× 收起' : '⇩ 导入 / 手写') + '</button>'
+        + '</div>';
       if (aiReady()) {
-        out += '<div class="fx-gen-note">用领地实况（规模、势力、政体、金库）让 AI 现造一棵，'
-          + '存本地、按聊天隔离。</div>';
+        out += '<div class="fx-gen-note">AI 按领地实况现造一棵；'
+          + '想自己定方向就点「导入 / 手写」，写 JSON 挂上去。</div>';
       } else {
-        out += '<div class="fx-gen-note">还没配 AI 接口。'
-          + '<span class="fx-gen-link" data-goset="1">去设置 → API 配一个</span>，'
-          + '配好回来就能生成。</div>';
+        out += '<div class="fx-gen-note">AI 还没配接口。'
+          + '<span class="fx-gen-link" data-goset="1">去设置 → API 配一个</span>；'
+          + '不想用 AI 也行，点「导入 / 手写」自己写树。</div>';
       }
     }
+
+    if (impOpen) {
+      out += '<div class="fx-imp">'
+        + '<textarea class="fx-imp-ta" data-impta="1" spellcheck="false"'
+        + ' placeholder="粘贴国策树 JSON，或者点下面「填空白模板」从骨架改">'
+        + escFn(impText) + '</textarea>'
+        + '<div class="fx-imp-row">'
+        + '<button class="fl-btn ghost" data-tpl="1">填空白模板</button>'
+        + '<button class="fl-btn" data-doimport="1">导入</button>'
+        + '</div>'
+        + (impErr ? '<div class="fx-gen-err">' + escFn(impErr) + '</div>' : '')
+        + '</div>';
+    }
+
     if (genErr) out += '<div class="fx-gen-err">' + escFn(genErr) + '</div>';
     out += '</div>';
     return out;
@@ -575,6 +700,7 @@
 
     out += '<div class="fx-head">'
       + '<div class="fx-title"><b>国 策</b><span>' + escFn(tr.name) + '</span>'
+      + (tr._imported ? '<u class="fx-gen-tag">导入</u>' : '')
       + (tr._generated ? '<u class="fx-gen-tag">AI 生成</u>' : '')
       + '</div>'
       + '<div class="fx-meters">'
@@ -686,6 +812,38 @@
       else toastFn('去底部导航的「设置」里配 API');
     });
 
+    /* ---- 导入 / 手写 ---- */
+    const imp = q('[data-import]');
+    if (imp) imp.addEventListener('click', () => {
+      impOpen = !impOpen;
+      if (impOpen && !impText) impText = '';   // 不自动塞模板，空着让人自己贴
+      impErr = '';
+      repaint(rootEl);
+    });
+
+    const ta = q('[data-impta]');
+    if (ta) {
+      /* 只记内容不重绘：一重绘光标就跳回开头，没法打字 */
+      ta.addEventListener('input', () => { impText = ta.value; });
+    }
+
+    const tpl = q('[data-tpl]');
+    if (tpl) tpl.addEventListener('click', () => {
+      impText = TEMPLATE;
+      impErr = '';
+      repaint(rootEl);
+    });
+
+    const doImp = q('[data-doimport]');
+    if (doImp) doImp.addEventListener('click', () => {
+      if (doImport()) {
+        toastFn('已导入：' + countryId);
+        repaint(rootEl);
+      } else {
+        repaint(rootEl);
+      }
+    });
+
     /* 推进：进「进行中」，不直接完成 */
     const run = q('[data-run]');
     if (run) run.addEventListener('click', () => {
@@ -795,7 +953,7 @@
     },
     _test: {
       html, layout, stateOf, prereqMet, meters, reqList, buildCommand, mutexTaken,
-      tree, tick, pushNews, allCountryIds,
+      tree, tick, pushNews, allCountryIds, normalizeImport, TEMPLATE,
       setCountry(id) { countryId = id; },
       setDone(ids) { done = new Set(ids || []); },
       setRunning(o) { running = new Map(Object.entries(o || {})); },
@@ -803,6 +961,9 @@
       setNews(o) { news = o || []; },
       setPeriodRaw(p) { lastPeriod = p || ''; },
       setSel(id) { sel = id; },
+      setImpText(v) { impText = v || ''; },
+      doImport,
+      impErr: () => impErr,
       done: () => Array.from(done),
       running: () => Object.fromEntries(running),
       news: () => news.slice(),
