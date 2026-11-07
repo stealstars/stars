@@ -75,7 +75,7 @@
     position: relative;
     display: inline-flex; align-items: center; gap: 6px;
     padding: 5px 14px; border-radius: 8px;
-    font-size: 12.5px; letter-spacing: 1.5px;
+    font-size: calc(12.5px * var(--fl-fs, 1)); letter-spacing: 1.5px;
     color: var(--fl-dim); cursor: pointer;
     border: 1px solid transparent;
     transition: color .18s, border-color .18s, background .18s, box-shadow .2s;
@@ -94,7 +94,7 @@
   .fl-ptab u {
     font-style: normal; text-decoration: none;
     min-width: 16px; padding: 0 4px; border-radius: 8px;
-    font-size: 10.5px; line-height: 15px; text-align: center;
+    font-size: calc(10.5px * var(--fl-fs, 1)); line-height: 15px; text-align: center;
     background: rgba(var(--fl-accent-rgb), .28); color: #fff3cf;
   }
 
@@ -108,14 +108,14 @@
     background: rgba(255,255,255,.015);
     text-align: center;
   }
-  .fl-guo-empty b { font-size: 14px; font-weight: 500; color: var(--fl-dim); letter-spacing: 2px; }
-  .fl-guo-empty small { font-size: 11.5px; color: var(--fl-dimmer); }
+  .fl-guo-empty b { font-size: calc(14px * var(--fl-fs, 1)); font-weight: 500; color: var(--fl-dim); letter-spacing: 2px; }
+  .fl-guo-empty small { font-size: calc(11.5px * var(--fl-fs, 1)); color: var(--fl-dimmer); }
 
   .fl-guo-head { display: flex; align-items: baseline; gap: 10px; }
-  .fl-guo-head b { font-size: 14px; font-weight: 600; letter-spacing: 4px; color: var(--fl-accent); }
+  .fl-guo-head b { font-size: calc(14px * var(--fl-fs, 1)); font-weight: 600; letter-spacing: 4px; color: var(--fl-accent); }
   .fl-guo-head u {
     font-style: normal; text-decoration: none;
-    font-size: 12px; color: #fff3cf;
+    font-size: calc(12px * var(--fl-fs, 1)); color: #fff3cf;
     background: rgba(var(--fl-accent-rgb), .26);
     padding: 0 7px; border-radius: 8px; line-height: 18px;
   }
@@ -137,16 +137,16 @@
   }
   .fl-guo-item:last-child { border-bottom: 0; }
   .fl-guo-item:hover { background: rgba(255,255,255,.035); }
-  .fl-guo-item b { font-size: 13px; font-weight: 500; color: var(--fl-pc); letter-spacing: .5px; }
+  .fl-guo-item b { font-size: calc(13px * var(--fl-fs, 1)); font-weight: 500; color: var(--fl-pc); letter-spacing: .5px; }
   .fl-guo-item u {
     font-style: normal; text-decoration: none;
-    font-size: 10.5px; color: var(--fl-dim);
+    font-size: calc(10.5px * var(--fl-fs, 1)); color: var(--fl-dim);
     border: 1px solid rgba(255,255,255,.12);
     padding: 0 5px; border-radius: 6px; line-height: 15px;
   }
-  .fl-guo-item span { font-size: 11.5px; color: var(--fl-dimmer); line-height: 1.6; }
+  .fl-guo-item span { font-size: calc(11.5px * var(--fl-fs, 1)); color: var(--fl-dimmer); line-height: 1.6; }
   .fl-guo-x {
-    font-style: normal; font-size: 12px; color: var(--fl-dimmer);
+    font-style: normal; font-size: calc(12px * var(--fl-fs, 1)); color: var(--fl-dimmer);
     opacity: 0; transition: opacity .16s, color .16s;
   }
   .fl-guo-item:hover .fl-guo-x { opacity: 1; color: #d4736a; }
@@ -244,28 +244,28 @@
     position: relative; z-index: 2;
   }
   .fl-pc-cat {
-    font-size: 9.5px; letter-spacing: 2.4px; color: var(--fl-pc);
+    font-size: calc(9.5px * var(--fl-fs, 1)); letter-spacing: 2.4px; color: var(--fl-pc);
     text-shadow: 0 0 10px var(--fl-pc-55);
   }
   .fl-pc-id {
-    font-size: 9px; letter-spacing: .5px;
+    font-size: calc(9px * var(--fl-fs, 1)); letter-spacing: .5px;
     color: rgba(var(--fl-text-rgb), .2);
     font-variant-numeric: tabular-nums;
   }
   .fl-pc-name {
     position: relative; z-index: 2;
-    font-size: 16px; font-weight: 700; letter-spacing: 1.4px; line-height: 1.3;
+    font-size: calc(16px * var(--fl-fs, 1)); font-weight: 700; letter-spacing: 1.4px; line-height: 1.3;
     color: var(--fl-bright);
     text-shadow: 0 1px 2px rgba(0,0,0,.9), 0 0 16px var(--fl-pc-28);
   }
   .fl-pc-desc {
     position: relative; z-index: 2;
-    font-size: 11.5px; line-height: 1.7;
+    font-size: calc(11.5px * var(--fl-fs, 1)); line-height: 1.7;
     color: rgba(var(--fl-text-rgb), .58);
   }
   .fl-pc-block {
     position: relative; z-index: 2; margin-top: auto;
-    font-size: 10px; letter-spacing: .3px; color: rgba(212,127,108,.85);
+    font-size: calc(10px * var(--fl-fs, 1)); letter-spacing: .3px; color: rgba(212,127,108,.85);
   }
 
   /* 选中角标 */
@@ -273,7 +273,7 @@
     position: absolute; top: 9px; right: 10px; z-index: 3;
     width: 17px; height: 17px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 700; color: #14100a;
+    font-size: calc(11px * var(--fl-fs, 1)); font-weight: 700; color: #14100a;
     background: var(--fl-pc); box-shadow: 0 0 12px var(--fl-pc-55);
     opacity: 0; transform: scale(.4) rotate(-40deg);
     transition: opacity .2s, transform .28s cubic-bezier(.2,1.6,.4,1);
@@ -318,8 +318,8 @@
     background: rgba(255,255,255,.008);
     min-height: 150px;
   }
-  .fl-pempty b { font-size: 13px; letter-spacing: 2px; color: rgba(var(--fl-text-rgb),.6); font-weight: 400; }
-  .fl-pempty small { font-size: 11px; color: rgba(var(--fl-text-rgb),.32); }
+  .fl-pempty b { font-size: calc(13px * var(--fl-fs, 1)); letter-spacing: 2px; color: rgba(var(--fl-text-rgb),.6); font-weight: 400; }
+  .fl-pempty small { font-size: calc(11px * var(--fl-fs, 1)); color: rgba(var(--fl-text-rgb),.32); }
   .fl-pempty-ring { position: absolute; inset: 0; pointer-events: none; }
   .fl-pempty-ring i {
     position: absolute; left: 50%; top: 50%;
@@ -360,20 +360,20 @@
     background: rgba(212,175,90,.035);
   }
   .fl-pai-r { display: flex; align-items: center; gap: 9px; }
-  .fl-pai-btn { flex: none; padding: 5px 13px; font-size: 12px; }
+  .fl-pai-btn { flex: none; padding: 5px 13px; font-size: calc(12px * var(--fl-fs, 1)); }
   .fl-pai-btn b { color: var(--fl-accent); font-weight: 600; }
   /* 不用 disabled：点了要有反馈，所以只做视觉上的「现在不该点」 */
   .fl-pai-btn[aria-disabled="true"] {
     opacity: .45;
     cursor: not-allowed;
   }
-  .fl-pai-hint { font-size: 11px; color: var(--fl-dim); }
+  .fl-pai-hint { font-size: calc(11px * var(--fl-fs, 1)); color: var(--fl-dim); }
   .fl-pai-idea { gap: 8px; }
   .fl-pai-in {
     flex: 1 1 auto;
     min-width: 0;
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--fl-fs, 1));
     padding: 6px 10px;
     border-radius: 7px;
     border: 1px solid var(--fl-line);
@@ -393,7 +393,7 @@
     -webkit-box-shadow: 0 0 0 1000px var(--fl-surface2, #14110b) inset;
     transition: background-color 9999s ease-out;
   }
-  .fl-pai-note { font-size: 11px; color: var(--fl-dimmer); line-height: 1.65; }
+  .fl-pai-note { font-size: calc(11px * var(--fl-fs, 1)); color: var(--fl-dimmer); line-height: 1.65; }
   .fl-pai-note b { color: var(--fl-dim); font-weight: 400; }
   .fl-pai-note.err { color: #e08a7a; }
   .fl-pai-note.warn { color: #d8b06a; }
@@ -412,7 +412,7 @@
     gap: 6px;
     padding: 4px 9px;
     border-radius: 7px;
-    font-size: 12px;
+    font-size: calc(12px * var(--fl-fs, 1));
     cursor: pointer;
     color: var(--fl-ink);
     border: 1px solid var(--fl-pc, var(--fl-accent));
@@ -421,11 +421,11 @@
   }
   .fl-made:hover { background: rgba(212,175,90,.1); }
   .fl-made.on { background: rgba(212,175,90,.18); }
-  .fl-made u { font-style: normal; text-decoration: none; font-size: 10px; color: var(--fl-dim); }
-  .fl-made s { text-decoration: none; font-size: 9px; letter-spacing: .06em; color: var(--fl-dimmer); }
+  .fl-made u { font-style: normal; text-decoration: none; font-size: calc(10px * var(--fl-fs, 1)); color: var(--fl-dim); }
+  .fl-made s { text-decoration: none; font-size: calc(9px * var(--fl-fs, 1)); letter-spacing: .06em; color: var(--fl-dimmer); }
   .fl-made i {
     font-style: normal;
-    font-size: 10px;
+    font-size: calc(10px * var(--fl-fs, 1));
     color: var(--fl-dimmer);
     opacity: .5;
     transition: opacity .14s, color .14s;
@@ -439,7 +439,7 @@
   /* ---- 关系提示 ---- */
   .fl-rel { display: flex; align-items: flex-start; gap: 10px; }  .fl-rel b {
     flex: none; padding: 1px 7px; border-radius: 3px;
-    font-weight: 400; letter-spacing: 2px; font-size: 10px;
+    font-weight: 400; letter-spacing: 2px; font-size: calc(10px * var(--fl-fs, 1));
   }
   .fl-rel span { flex: 1; }
   .fl-rel.sy b { color: #9ed08a; border: 1px solid rgba(143,191,122,.4); background: rgba(143,191,122,.1); }
@@ -497,34 +497,34 @@
     .fl-policy { gap: 12px; }
     .fl-pbar { gap: 9px; }
     .fl-pcats { gap: 5px; }
-    .fl-pcat { padding: 4px 9px; font-size: 11px; letter-spacing: .6px; }
-    .fl-pcat u { font-size: 9px; }
+    .fl-pcat { padding: 4px 9px; font-size: calc(11px * var(--fl-fs, 1)); letter-spacing: .6px; }
+    .fl-pcat u { font-size: calc(9px * var(--fl-fs, 1)); }
     .fl-pact { width: 100%; }
-    .fl-pact .fl-btn { flex: 1; padding: 9px 6px; font-size: 12px; letter-spacing: 1.4px; }
+    .fl-pact .fl-btn { flex: 1; padding: 9px 6px; font-size: calc(12px * var(--fl-fs, 1)); letter-spacing: 1.4px; }
 
     .fl-phand {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 9px; min-height: 0;
     }
     .fl-pc-in { min-height: 112px; padding: 11px 12px 13px; gap: 5px; border-radius: 8px; }
-    .fl-pc-name { font-size: 14px; letter-spacing: .8px; }
+    .fl-pc-name { font-size: calc(14px * var(--fl-fs, 1)); letter-spacing: .8px; }
     .fl-pc-desc {
-      font-size: 10.5px; line-height: 1.62;
+      font-size: calc(10.5px * var(--fl-fs, 1)); line-height: 1.62;
       display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
       overflow: hidden;
     }
-    .fl-pc-cat { font-size: 9px; letter-spacing: 1.6px; }
+    .fl-pc-cat { font-size: calc(9px * var(--fl-fs, 1)); letter-spacing: 1.6px; }
     .fl-pc-id { display: none; }
-    .fl-pc-check { width: 16px; height: 16px; top: 8px; right: 8px; font-size: 10px; }
-    .fl-pc-block { font-size: 9.5px; }
+    .fl-pc-check { width: 16px; height: 16px; top: 8px; right: 8px; font-size: calc(10px * var(--fl-fs, 1)); }
+    .fl-pc-block { font-size: calc(9.5px * var(--fl-fs, 1)); }
 
     .fl-pfoot { gap: 10px; padding-top: 11px; }
-    .fl-plabel { font-size: 10px; letter-spacing: 1.6px; }
-    .fl-chosen { font-size: 11.5px; padding: 3px 8px 3px 9px; }
+    .fl-plabel { font-size: calc(10px * var(--fl-fs, 1)); letter-spacing: 1.6px; }
+    .fl-chosen { font-size: calc(11.5px * var(--fl-fs, 1)); padding: 3px 8px 3px 9px; }
     .fl-pgo { gap: 7px; }
     .fl-pgo .fl-btn { flex: 1; padding: 10px 6px; }
-    .fl-rel { font-size: 11px; gap: 7px; }
-    .fl-rel b { font-size: 9.5px; letter-spacing: 1.2px; padding: 1px 5px; }
+    .fl-rel { font-size: calc(11px * var(--fl-fs, 1)); gap: 7px; }
+    .fl-rel b { font-size: calc(9.5px * var(--fl-fs, 1)); letter-spacing: 1.2px; padding: 1px 5px; }
     .fl-rel-r { margin-left: 0; }
     .fl-pempty { padding: 32px 16px; min-height: 130px; }
     .fl-pempty-ring i:nth-child(3) { display: none; }
@@ -532,10 +532,10 @@
 
   /* ---- 小屏手机（<=400px）---- */
   @media (max-width: 400px) {
-    .fl-pcat { padding: 3px 7px; font-size: 10.5px; }
+    .fl-pcat { padding: 3px 7px; font-size: calc(10.5px * var(--fl-fs, 1)); }
     .fl-pc-in { min-height: 104px; padding: 10px 11px 11px; }
-    .fl-pc-name { font-size: 13px; }
-    .fl-pc-desc { font-size: 10px; -webkit-line-clamp: 3; }
+    .fl-pc-name { font-size: calc(13px * var(--fl-fs, 1)); }
+    .fl-pc-desc { font-size: calc(10px * var(--fl-fs, 1)); -webkit-line-clamp: 3; }
   }
 
   /* ---- 横屏矮屏：别让卡片占满 ---- */

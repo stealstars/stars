@@ -10,10 +10,10 @@
 
   .fl-aic-head { padding: 14px 0 18px; border-bottom: 1px solid rgba(var(--fl-accent-rgb), .12); }
   .fl-aic-title {
-    font-size: 15px; font-weight: 600; letter-spacing: 2px; color: var(--fl-bright);
+    font-size: calc(15px * var(--fl-fs, 1)); font-weight: 600; letter-spacing: 2px; color: var(--fl-bright);
     margin-bottom: 7px;
   }
-  .fl-aic-sub { font-size: 12px; color: rgba(var(--fl-text-rgb), .42); letter-spacing: .3px; }
+  .fl-aic-sub { font-size: calc(12px * var(--fl-fs, 1)); color: rgba(var(--fl-text-rgb), .42); letter-spacing: .3px; }
 
   /* 这个通道服务于哪几个功能：配之前就能看出配了有什么用 */
   .fl-aic-uses {
@@ -21,11 +21,11 @@
     padding: 12px 0 0;
   }
   .fl-aic-uses-l {
-    flex: none; font-size: 11px; letter-spacing: .06em;
+    flex: none; font-size: calc(11px * var(--fl-fs, 1)); letter-spacing: .06em;
     color: rgba(var(--fl-text-rgb), .32);
   }
   .fl-aic-use {
-    font-size: 11px; padding: 2px 8px; border-radius: 3px;
+    font-size: calc(11px * var(--fl-fs, 1)); padding: 2px 8px; border-radius: 3px;
     color: var(--fl-dim);
     border: 1px solid rgba(var(--fl-accent-rgb), .2);
     background: rgba(var(--fl-accent-rgb), .05);
@@ -34,7 +34,7 @@
   .fl-aic-tabs { display: flex; gap: 6px; padding: 14px 0 0; flex-wrap: wrap; }
   .fl-aic-tab {
     padding: 5px 13px; border-radius: 4px; cursor: pointer;
-    font-size: 12px; letter-spacing: 1.4px; color: var(--fl-dim);
+    font-size: calc(12px * var(--fl-fs, 1)); letter-spacing: 1.4px; color: var(--fl-dim);
     border: 1px solid rgba(var(--fl-accent-rgb), .16);
     background: rgba(255,255,255,.015);
     transition: all .15s;
@@ -51,11 +51,11 @@
     border-bottom: 1px solid rgba(var(--fl-accent-rgb), .09);
   }
   .fl-aic-l {
-    font-size: 13.5px; font-weight: 600; letter-spacing: 1px;
+    font-size: calc(13.5px * var(--fl-fs, 1)); font-weight: 600; letter-spacing: 1px;
     color: var(--fl-bright);
   }
   .fl-aic-h {
-    font-size: 11.5px; line-height: 1.65;
+    font-size: calc(11.5px * var(--fl-fs, 1)); line-height: 1.65;
     color: rgba(var(--fl-text-rgb), .38);
     letter-spacing: .2px;
   }
@@ -64,7 +64,7 @@
   .fl-aic-in {
     width: 100%; box-sizing: border-box;
     padding: 12px 14px; border-radius: 7px;
-    font: inherit; font-size: 13.5px; letter-spacing: .3px;
+    font: inherit; font-size: calc(13.5px * var(--fl-fs, 1)); letter-spacing: .3px;
     color: var(--fl-text);
     background: rgba(0,0,0,.34);
     border: 1px solid rgba(var(--fl-accent-rgb), .2);
@@ -78,7 +78,7 @@
     background: rgba(0,0,0,.46);
     box-shadow: 0 0 0 3px rgba(var(--fl-accent-rgb), .1), 0 0 14px rgba(var(--fl-accent-rgb), .12);
   }
-  .fl-aic-in[type="password"] { letter-spacing: 2px; font-size: 15px; }
+  .fl-aic-in[type="password"] { letter-spacing: 2px; font-size: calc(15px * var(--fl-fs, 1)); }
 
   /* ---- 下拉 ---- */
   .fl-aic-row { display: flex; gap: 8px; }
@@ -87,7 +87,7 @@
     width: 100%; box-sizing: border-box;
     -webkit-appearance: none; -moz-appearance: none; appearance: none;
     padding: 12px 38px 12px 14px; border-radius: 7px;
-    font: inherit; font-size: 13.5px; letter-spacing: .3px;
+    font: inherit; font-size: calc(13.5px * var(--fl-fs, 1)); letter-spacing: .3px;
     color: var(--fl-text);
     background: rgba(0,0,0,.34);
     border: 1px solid rgba(var(--fl-accent-rgb), .2);
@@ -100,7 +100,7 @@
   .fl-aic-sel option { background: var(--fl-surface2, #17120c); color: var(--fl-text); }
   .fl-aic-caret {
     position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
-    font-style: normal; font-size: 11px; pointer-events: none;
+    font-style: normal; font-size: calc(11px * var(--fl-fs, 1)); pointer-events: none;
     color: rgba(var(--fl-text-rgb), .42);
   }
   .fl-aic-selwrap:has(.fl-aic-sel[disabled]) .fl-aic-caret { opacity: .3; }
@@ -109,7 +109,7 @@
   .fl-aic-btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 7px;
     padding: 11px 18px; border-radius: 7px; cursor: pointer;
-    font: inherit; font-size: 13px; letter-spacing: 1.6px;
+    font: inherit; font-size: calc(13px * var(--fl-fs, 1)); letter-spacing: 1.6px;
     color: var(--fl-text);
     background: rgba(var(--fl-accent-rgb), .1);
     border: 1px solid rgba(var(--fl-accent-rgb), .28);
@@ -144,7 +144,7 @@
   /* ---- 已选择模型 ---- */
   .fl-aic-cur {
     padding: 11px 14px; border-radius: 7px;
-    font-size: 13px; letter-spacing: .4px;
+    font-size: calc(13px * var(--fl-fs, 1)); letter-spacing: .4px;
     color: var(--fl-accent);
     background: rgba(var(--fl-accent-rgb), .07);
     border: 1px solid rgba(var(--fl-accent-rgb), .16);
@@ -154,12 +154,12 @@
   /* ---- 模型分布 / 属性 ---- */
   .fl-aic-dist {
     display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
-    font-size: 11px; letter-spacing: .2px; color: rgba(var(--fl-text-rgb), .34);
+    font-size: calc(11px * var(--fl-fs, 1)); letter-spacing: .2px; color: rgba(var(--fl-text-rgb), .34);
     padding-top: 2px;
   }
   .fl-aic-tag {
     display: inline-block; padding: 1px 7px; border-radius: 3px;
-    font-style: normal; font-size: 10px; letter-spacing: .4px;
+    font-style: normal; font-size: calc(10px * var(--fl-fs, 1)); letter-spacing: .4px;
     border: 1px solid;
   }
   .fl-aic-tag.idle { color: #9ed08a; border-color: rgba(143,191,122,.36); background: rgba(143,191,122,.1); }
@@ -170,7 +170,7 @@
   /* ---- 提示 ---- */
   .fl-aic-err {
     margin-top: 14px; padding: 11px 14px; border-radius: 6px;
-    font-size: 12px; line-height: 1.7;
+    font-size: calc(12px * var(--fl-fs, 1)); line-height: 1.7;
     color: #e8a396;
     background: rgba(212,127,108,.09);
     border: 1px solid rgba(212,127,108,.32);
@@ -178,7 +178,7 @@
   }
   .fl-aic-ok {
     margin-top: 14px; padding: 11px 14px; border-radius: 6px;
-    font-size: 12px; color: #a8d69a;
+    font-size: calc(12px * var(--fl-fs, 1)); color: #a8d69a;
     background: rgba(143,191,122,.08);
     border: 1px solid rgba(143,191,122,.3);
   }
@@ -187,19 +187,19 @@
 
   .fl-aic-note {
     margin-top: 22px; padding: 14px 16px; border-radius: 7px;
-    font-size: 11.5px; line-height: 1.9;
+    font-size: calc(11.5px * var(--fl-fs, 1)); line-height: 1.9;
     color: rgba(var(--fl-text-rgb), .38);
     background: rgba(255,255,255,.014);
     border: 1px solid rgba(var(--fl-accent-rgb), .09);
   }
   .fl-aic-note b {
     display: block; margin-bottom: 6px;
-    font-weight: 400; font-size: 10.5px; letter-spacing: 2.4px;
+    font-weight: 400; font-size: calc(10.5px * var(--fl-fs, 1)); letter-spacing: 2.4px;
     color: rgba(var(--fl-accent-rgb), .55);
   }
   .fl-aic-note code {
     padding: 1px 5px; border-radius: 3px;
-    font-family: ui-monospace, Consolas, monospace; font-size: 10.5px;
+    font-family: ui-monospace, Consolas, monospace; font-size: calc(10.5px * var(--fl-fs, 1));
     color: rgba(var(--fl-accent-rgb), .78);
     background: rgba(var(--fl-accent-rgb), .08);
     word-break: break-all;
@@ -209,23 +209,23 @@
   @media (max-width: 760px) {
     .fl-aic { padding: 0 0 30px; }
     .fl-aic-head { padding: 10px 0 14px; }
-    .fl-aic-title { font-size: 14px; letter-spacing: 1.4px; }
-    .fl-aic-sub { font-size: 11.5px; }
+    .fl-aic-title { font-size: calc(14px * var(--fl-fs, 1)); letter-spacing: 1.4px; }
+    .fl-aic-sub { font-size: calc(11.5px * var(--fl-fs, 1)); }
     .fl-aic-f { padding: 16px 0; gap: 7px; }
-    .fl-aic-l { font-size: 13px; }
-    .fl-aic-h { font-size: 11px; }
-    .fl-aic-in, .fl-aic-sel { padding: 11px 12px; font-size: 13px; }
+    .fl-aic-l { font-size: calc(13px * var(--fl-fs, 1)); }
+    .fl-aic-h { font-size: calc(11px * var(--fl-fs, 1)); }
+    .fl-aic-in, .fl-aic-sel { padding: 11px 12px; font-size: calc(13px * var(--fl-fs, 1)); }
     .fl-aic-sel { padding-right: 34px; }
-    .fl-aic-btn { padding: 11px 14px; font-size: 12.5px; letter-spacing: 1.2px; }
+    .fl-aic-btn { padding: 11px 14px; font-size: calc(12.5px * var(--fl-fs, 1)); letter-spacing: 1.2px; }
     .fl-aic-foot { gap: 8px; }
     .fl-aic-foot .fl-aic-btn { flex: 1; }
-    .fl-aic-note { font-size: 11px; line-height: 1.85; }
+    .fl-aic-note { font-size: calc(11px * var(--fl-fs, 1)); line-height: 1.85; }
   }
   /* ---- 输入框 ---- */
   .fl-aic-in {
     width: 100%; box-sizing: border-box;
     padding: 12px 14px; border-radius: 7px;
-    font: inherit; font-size: 13.5px; letter-spacing: .3px;
+    font: inherit; font-size: calc(13.5px * var(--fl-fs, 1)); letter-spacing: .3px;
     color: var(--fl-text);
     background: rgba(0,0,0,.34);
     border: 1px solid rgba(var(--fl-accent-rgb), .2);
@@ -239,7 +239,7 @@
     background: rgba(0,0,0,.46);
     box-shadow: 0 0 0 3px rgba(var(--fl-accent-rgb), .1), 0 0 14px rgba(var(--fl-accent-rgb), .12);
   }
-  .fl-aic-in[type="password"] { letter-spacing: 2px; font-size: 15px; }
+  .fl-aic-in[type="password"] { letter-spacing: 2px; font-size: calc(15px * var(--fl-fs, 1)); }
 
   /* ---- 下拉 ---- */
   .fl-aic-row { display: flex; gap: 8px; }
@@ -248,7 +248,7 @@
     width: 100%; box-sizing: border-box;
     -webkit-appearance: none; -moz-appearance: none; appearance: none;
     padding: 12px 38px 12px 14px; border-radius: 7px;
-    font: inherit; font-size: 13.5px; letter-spacing: .3px;
+    font: inherit; font-size: calc(13.5px * var(--fl-fs, 1)); letter-spacing: .3px;
     color: var(--fl-text);
     background: rgba(0,0,0,.34);
     border: 1px solid rgba(var(--fl-accent-rgb), .2);
@@ -261,7 +261,7 @@
   .fl-aic-sel option { background: var(--fl-surface2, #17120c); color: var(--fl-text); }
   .fl-aic-caret {
     position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
-    font-style: normal; font-size: 11px; pointer-events: none;
+    font-style: normal; font-size: calc(11px * var(--fl-fs, 1)); pointer-events: none;
     color: rgba(var(--fl-text-rgb), .42);
   }
   .fl-aic-selwrap:has(.fl-aic-sel[disabled]) .fl-aic-caret { opacity: .3; }
@@ -270,7 +270,7 @@
   .fl-aic-btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 7px;
     padding: 11px 18px; border-radius: 7px; cursor: pointer;
-    font: inherit; font-size: 13px; letter-spacing: 1.6px;
+    font: inherit; font-size: calc(13px * var(--fl-fs, 1)); letter-spacing: 1.6px;
     color: var(--fl-text);
     background: rgba(var(--fl-accent-rgb), .1);
     border: 1px solid rgba(var(--fl-accent-rgb), .28);
@@ -305,7 +305,7 @@
   /* ---- 已选择模型 ---- */
   .fl-aic-cur {
     padding: 11px 14px; border-radius: 7px;
-    font-size: 13px; letter-spacing: .4px;
+    font-size: calc(13px * var(--fl-fs, 1)); letter-spacing: .4px;
     color: var(--fl-accent);
     background: rgba(var(--fl-accent-rgb), .07);
     border: 1px solid rgba(var(--fl-accent-rgb), .16);
@@ -315,7 +315,7 @@
   /* ---- 提示 ---- */
   .fl-aic-err {
     margin-top: 14px; padding: 11px 14px; border-radius: 6px;
-    font-size: 12px; line-height: 1.7;
+    font-size: calc(12px * var(--fl-fs, 1)); line-height: 1.7;
     color: #e8a396;
     background: rgba(212,127,108,.09);
     border: 1px solid rgba(212,127,108,.32);
@@ -323,7 +323,7 @@
   }
   .fl-aic-ok {
     margin-top: 14px; padding: 11px 14px; border-radius: 6px;
-    font-size: 12px; color: #a8d69a;
+    font-size: calc(12px * var(--fl-fs, 1)); color: #a8d69a;
     background: rgba(143,191,122,.08);
     border: 1px solid rgba(143,191,122,.3);
   }
@@ -332,19 +332,19 @@
 
   .fl-aic-note {
     margin-top: 22px; padding: 14px 16px; border-radius: 7px;
-    font-size: 11.5px; line-height: 1.9;
+    font-size: calc(11.5px * var(--fl-fs, 1)); line-height: 1.9;
     color: rgba(var(--fl-text-rgb), .38);
     background: rgba(255,255,255,.014);
     border: 1px solid rgba(var(--fl-accent-rgb), .09);
   }
   .fl-aic-note b {
     display: block; margin-bottom: 6px;
-    font-weight: 400; font-size: 10.5px; letter-spacing: 2.4px;
+    font-weight: 400; font-size: calc(10.5px * var(--fl-fs, 1)); letter-spacing: 2.4px;
     color: rgba(var(--fl-accent-rgb), .55);
   }
   .fl-aic-note code {
     padding: 1px 5px; border-radius: 3px;
-    font-family: ui-monospace, Consolas, monospace; font-size: 10.5px;
+    font-family: ui-monospace, Consolas, monospace; font-size: calc(10.5px * var(--fl-fs, 1));
     color: rgba(var(--fl-accent-rgb), .78);
     background: rgba(var(--fl-accent-rgb), .08);
     word-break: break-all;
@@ -354,17 +354,17 @@
   @media (max-width: 760px) {
     .fl-aic { padding: 0 0 30px; }
     .fl-aic-head { padding: 10px 0 14px; }
-    .fl-aic-title { font-size: 14px; letter-spacing: 1.4px; }
-    .fl-aic-sub { font-size: 11.5px; }
+    .fl-aic-title { font-size: calc(14px * var(--fl-fs, 1)); letter-spacing: 1.4px; }
+    .fl-aic-sub { font-size: calc(11.5px * var(--fl-fs, 1)); }
     .fl-aic-f { padding: 16px 0; gap: 7px; }
-    .fl-aic-l { font-size: 13px; }
-    .fl-aic-h { font-size: 11px; }
-    .fl-aic-in, .fl-aic-sel { padding: 11px 12px; font-size: 13px; }
+    .fl-aic-l { font-size: calc(13px * var(--fl-fs, 1)); }
+    .fl-aic-h { font-size: calc(11px * var(--fl-fs, 1)); }
+    .fl-aic-in, .fl-aic-sel { padding: 11px 12px; font-size: calc(13px * var(--fl-fs, 1)); }
     .fl-aic-sel { padding-right: 34px; }
-    .fl-aic-btn { padding: 11px 14px; font-size: 12.5px; letter-spacing: 1.2px; }
+    .fl-aic-btn { padding: 11px 14px; font-size: calc(12.5px * var(--fl-fs, 1)); letter-spacing: 1.2px; }
     .fl-aic-foot { gap: 8px; }
     .fl-aic-foot .fl-aic-btn { flex: 1; }
-    .fl-aic-note { font-size: 11px; line-height: 1.85; }
+    .fl-aic-note { font-size: calc(11px * var(--fl-fs, 1)); line-height: 1.85; }
   }
 `;
 })();

@@ -199,6 +199,10 @@
       text: normHex(p.text),
       auto: p.auto !== false,
       pos: p.pos && typeof p.pos === 'object' ? p.pos : null,
+      // 外观三件：字号百分比、字体族、对比度
+      fs: (() => { const n = Number(p.fs); return Number.isFinite(n) ? Math.max(85, Math.min(135, n)) : 100; })(),
+      font: p.font === 'sans' ? 'sans' : 'serif',
+      contrast: !!p.contrast,
     };
   }
 
@@ -295,6 +299,15 @@
       crest2: mixHex(accent, '#000000', 0.06),
       crest3: mixHex(accent, '#000000', 0.34),
     };
+  }
+
+  /** 字号 / 字体 / 对比度：一个 CSS 变量加两个类名，全挂在 root 上 */
+  function applyLook() {
+    if (!root) return;
+    const fs = Math.max(85, Math.min(135, Number(prefs && prefs.fs) || 100));
+    try { root.style.setProperty('--fl-fs', String(fs / 100)); } catch (e) { /* 忽略 */ }
+    root.classList.toggle('fl-contrast', !!(prefs && prefs.contrast));
+    root.classList.toggle('fl-sans', !!(prefs && prefs.font === 'sans'));
   }
 
   /** 把整套配色写进 root 的内联变量；样式表被改写也不影响 */
@@ -1971,10 +1984,24 @@
     --fl-plan: #8fa9cf;
     --fl-serif: "Noto Serif SC", "Songti SC", "Source Han Serif SC", "STSong", serif;
     --fl-num: "Optima", "Palatino Linotype", "Georgia", serif;
+    /* 界面缩放：所有 font-size 都写成 calc(Npx * var(--fl-fs))，设置里只调这一个值 */
+    --fl-fs: 1;
     /* 独立全屏层：不继承酒馆楼层的层叠上下文，避免被正文压住 */
     position: fixed; inset: 0; z-index: 2147483000;
     pointer-events: none;
     isolation: isolate;
+  }
+
+  /* 对比度增强：暗底上 0.56 / 0.30 这种透明度看久了累，开了就把次要文字提亮 */
+  #fief-ledger-root.fl-contrast {
+    --fl-dim: rgba(var(--fl-text-rgb), 0.84);
+    --fl-dimmer: rgba(var(--fl-text-rgb), 0.62);
+    --fl-line: rgba(var(--fl-accent-rgb), 0.20);
+    --fl-line2: rgba(var(--fl-accent-rgb), 0.38);
+  }
+  /* 无衬线：有些人不喜欢宋体在暗底上的细笔画 */
+  #fief-ledger-root.fl-sans {
+    --fl-serif: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans SC", system-ui, sans-serif;
   }
 
   /* ================= 悬浮星 ================= */
@@ -2055,16 +2082,16 @@
   }
   .fl-brand { display: flex; align-items: baseline; gap: 10px; }
   .fl-brand b {
-    font-size: 16px; letter-spacing: 6px; color: var(--fl-accent); font-weight: 700;
+    font-size: calc(16px * var(--fl-fs, 1)); letter-spacing: 6px; color: var(--fl-accent); font-weight: 700;
     text-shadow: 0 0 22px rgba(var(--fl-accent-rgb),0.28);
   }
   .fl-brand em {
-    font-style: normal; font-size: 9px; letter-spacing: 2.2px;
+    font-style: normal; font-size: calc(9px * var(--fl-fs, 1)); letter-spacing: 2.2px;
     color: var(--fl-dimmer); text-transform: uppercase;
   }
   .fl-domsel { display: flex; gap: 6px; margin-left: 6px; flex-wrap: wrap; }
   .fl-domchip {
-    cursor: pointer; font-size: 11.5px; letter-spacing: .8px; padding: 4px 10px;
+    cursor: pointer; font-size: calc(11.5px * var(--fl-fs, 1)); letter-spacing: .8px; padding: 4px 10px;
     border-radius: 2px; color: var(--fl-dimmer); border: 1px solid transparent;
     transition: all .15s ease;
   }
@@ -2073,7 +2100,7 @@
   .fl-top-r { margin-left: auto; display: flex; align-items: center; gap: 10px; }
   .fl-btn {
     cursor: pointer; border: 1px solid var(--fl-line2); background: rgba(var(--fl-accent-rgb),0.07);
-    color: var(--fl-bright); font: inherit; font-size: 12px; letter-spacing: 1.4px;
+    color: var(--fl-bright); font: inherit; font-size: calc(12px * var(--fl-fs, 1)); letter-spacing: 1.4px;
     padding: 6px 13px; border-radius: 2px; transition: all .16s ease;
   }
   .fl-btn:hover { background: rgba(var(--fl-accent-rgb),0.18); border-color: var(--fl-accent); }
@@ -2081,7 +2108,7 @@
   .fl-btn.ghost { background: transparent; border-color: var(--fl-line); color: var(--fl-dim); }
   .fl-btn.ghost:hover { color: #fff; border-color: var(--fl-line2); }
   .fl-switch {
-    display: flex; align-items: center; gap: 6px; font-size: 11.5px;
+    display: flex; align-items: center; gap: 6px; font-size: calc(11.5px * var(--fl-fs, 1));
     color: var(--fl-dim); cursor: pointer; user-select: none; letter-spacing: .6px;
   }
   .fl-switch input { accent-color: var(--fl-accent); width: 13px; height: 13px; cursor: pointer; }
@@ -2104,13 +2131,13 @@
     background: var(--fl-bg2); flex: none;
   }
   .fl-set-title {
-    font-family: var(--fl-serif); font-size: 14px; letter-spacing: 5px;
+    font-family: var(--fl-serif); font-size: calc(14px * var(--fl-fs, 1)); letter-spacing: 5px;
     color: var(--fl-accent); flex: none;
   }
   .fl-set-tabs { display: flex; gap: 4px; overflow-x: auto; }
   .fl-set-tabs::-webkit-scrollbar { display: none; }
   .fl-set-tab {
-    cursor: pointer; font-size: 12px; letter-spacing: 1.4px; padding: 5px 12px;
+    cursor: pointer; font-size: calc(12px * var(--fl-fs, 1)); letter-spacing: 1.4px; padding: 5px 12px;
     color: var(--fl-dimmer); border: 1px solid transparent; border-radius: 2px;
     white-space: nowrap; transition: all .15s ease;
   }
@@ -2123,17 +2150,23 @@
   .fl-sec { margin-bottom: 22px; }
   .fl-sec-h {
     display: flex; align-items: baseline; gap: 9px; margin-bottom: 10px;
-    font-size: 11.5px; letter-spacing: 2.4px; color: var(--fl-dim);
+    font-size: calc(11.5px * var(--fl-fs, 1)); letter-spacing: 2.4px; color: var(--fl-dim);
   }
   .fl-sec-h em {
-    font-style: normal; font-size: 10px; letter-spacing: .6px; color: var(--fl-dimmer);
+    font-style: normal; font-size: calc(10px * var(--fl-fs, 1)); letter-spacing: .6px; color: var(--fl-dimmer);
   }
   .fl-sec-h span { flex: 1; height: 1px; background: var(--fl-line); }
-  .fl-sec-note { font-size: 11px; line-height: 1.75; color: var(--fl-dimmer); margin-top: 9px; }
+  .fl-sec-note { font-size: calc(11px * var(--fl-fs, 1)); line-height: 1.75; color: var(--fl-dimmer); margin-top: 9px; }
+  .fl-fsrow { display: flex; align-items: center; gap: 12px; padding: 2px 0; }
+  .fl-fsrow input[type=range] { flex: 1; accent-color: var(--fl-accent); cursor: pointer; }
+  .fl-fsrow b {
+    font-size: calc(12px * var(--fl-fs, 1)); color: var(--fl-accent);
+    min-width: 46px; text-align: right; font-variant-numeric: tabular-nums;
+  }
 
 /* 归档面板 */
 .fl-arch-dom {
-  font-size: 11px;
+  font-size: calc(11px * var(--fl-fs, 1));
   letter-spacing: .08em;
   color: var(--fl-dimmer);
   margin: 14px 0 6px;
@@ -2146,13 +2179,13 @@
   gap: 8px;
   padding: 7px 9px;
   border-radius: 7px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--fl-fs, 1));
 }
 .fl-arch-row:hover { background: rgba(212, 175, 90, .05); }
 .fl-arch-nm { flex: 1 1 auto; color: var(--fl-ink); }
 .fl-arch-tag {
   flex: 0 0 auto;
-  font-size: 10px;
+  font-size: calc(10px * var(--fl-fs, 1));
   color: var(--fl-dimmer);
   border: 1px solid var(--fl-line);
   border-radius: 4px;
@@ -2165,7 +2198,7 @@
 .fl-arch-act { flex: 0 0 auto; display: flex; gap: 6px; }
 .fl-mini {
   font: inherit;
-  font-size: 11px;
+  font-size: calc(11px * var(--fl-fs, 1));
   padding: 3px 9px;
   border-radius: 5px;
   cursor: pointer;
@@ -2183,7 +2216,7 @@
 
   /* ---- 读取日志：等宽小字，手机上靠长按选取 / 复制按钮 ---- */
   .fl-logbar { display: flex; gap: 8px; margin-bottom: 8px; }
-  .fl-logbar .fl-btn { padding: 4px 11px; font-size: 11px; letter-spacing: .8px; }
+  .fl-logbar .fl-btn { padding: 4px 11px; font-size: calc(11px * var(--fl-fs, 1)); letter-spacing: .8px; }
   .fl-log {
     max-height: 300px; overflow-y: auto; padding: 2px;
     border: 1px solid var(--fl-line); border-radius: 2px;
@@ -2192,7 +2225,7 @@
     -webkit-overflow-scrolling: touch;
   }
   .fl-log-row {
-    font-size: 10.5px; line-height: 1.6; padding: 4px 7px;
+    font-size: calc(10.5px * var(--fl-fs, 1)); line-height: 1.6; padding: 4px 7px;
     color: var(--fl-dim); white-space: pre-wrap; word-break: break-word;
     border-bottom: 1px solid rgba(var(--fl-accent-rgb),0.07);
     user-select: text; -webkit-user-select: text;
@@ -2204,14 +2237,14 @@
   /* 回退链：比正文再淡一档，不抢数字 */
   .fl-log-row em {
     display: block; margin-top: 2px; font-style: normal;
-    font-size: 10px; color: var(--fl-dimmer);
+    font-size: calc(10px * var(--fl-fs, 1)); color: var(--fl-dimmer);
   }
   /* 数字那行要比回退链亮一点：先看数量对不对，再看是哪一层给的 */
   .fl-log-row em.fl-log-num { color: var(--fl-dim); margin-top: 1px; }
   /* 错误是语义色，不跟主题走 */
   .fl-log-row.err { color: #e8816f; border-bottom-color: rgba(232,129,111,0.22); }
   .fl-log-row.err b, .fl-log-row.err em { color: #e8816f; }
-  .fl-log-empty { padding: 14px 8px; text-align: center; font-size: 11px; color: var(--fl-dimmer); }
+  .fl-log-empty { padding: 14px 8px; text-align: center; font-size: calc(11px * var(--fl-fs, 1)); color: var(--fl-dimmer); }
 
   /* ---- 色板：预设与字体色共用 ---- */
   /* 宽屏别把色板摊成一条：限宽 + 最小列宽，名字才不会被省略成「琥…」 */
@@ -2225,7 +2258,7 @@
   .fl-opt:hover { border-color: var(--fl-line2); background: rgba(var(--fl-accent-rgb),0.08); }
   .fl-opt.on { border-color: var(--fl-accent); background: rgba(var(--fl-accent-rgb),0.13); }
   .fl-opt u {
-    text-decoration: none; font-size: 11.5px; letter-spacing: 1px;
+    text-decoration: none; font-size: calc(11.5px * var(--fl-fs, 1)); letter-spacing: 1px;
     color: var(--fl-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .fl-opt.on u { color: var(--fl-text); }
@@ -2265,18 +2298,18 @@
     display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
   }
   .fl-preview b {
-    font-family: var(--fl-serif); font-size: 15px; letter-spacing: 2px; color: var(--fl-bright);
+    font-family: var(--fl-serif); font-size: calc(15px * var(--fl-fs, 1)); letter-spacing: 2px; color: var(--fl-bright);
   }
   .fl-preview i {
-    font-style: normal; font-size: 12px; letter-spacing: .8px; color: var(--fl-dim);
+    font-style: normal; font-size: calc(12px * var(--fl-fs, 1)); letter-spacing: .8px; color: var(--fl-dim);
   }
   .fl-preview u {
-    text-decoration: none; font-size: 15px; color: var(--fl-accent);
+    text-decoration: none; font-size: calc(15px * var(--fl-fs, 1)); color: var(--fl-accent);
     font-variant-numeric: tabular-nums;
   }
   .fl-close2 {
     width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
-    cursor: pointer; color: var(--fl-dimmer); font-size: 20px; line-height: 1;
+    cursor: pointer; color: var(--fl-dimmer); font-size: calc(20px * var(--fl-fs, 1)); line-height: 1;
     border-radius: 50%; transition: all .16s ease; border: 1px solid transparent;
   }
   .fl-close2:hover { color: #fff; background: rgba(var(--fl-accent-rgb),0.12); border-color: var(--fl-line); }
@@ -2291,17 +2324,17 @@
   .fl-crest svg { width: 100%; height: 100%; display: block; }
   .fl-hmain { flex: 1; min-width: 0; }
   .fl-hname {
-    font-size: 30px; letter-spacing: 3px; color: var(--fl-bright); font-weight: 700;
+    font-size: calc(30px * var(--fl-fs, 1)); letter-spacing: 3px; color: var(--fl-bright); font-weight: 700;
     line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     text-shadow: 0 2px 18px rgba(0,0,0,.6);
   }
   .fl-hsub {
-    margin-top: 8px; font-size: 11.5px; letter-spacing: 1.2px; color: var(--fl-dimmer);
+    margin-top: 8px; font-size: calc(11.5px * var(--fl-fs, 1)); letter-spacing: 1.2px; color: var(--fl-dimmer);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .fl-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
   .fl-chip {
-    font-size: 11px; letter-spacing: .9px; padding: 3px 9px; border-radius: 2px;
+    font-size: calc(11px * var(--fl-fs, 1)); letter-spacing: .9px; padding: 3px 9px; border-radius: 2px;
     color: var(--fl-dim); border: 1px solid var(--fl-line); background: rgba(255,255,255,0.012);
   }
   .fl-chip.gold { color: var(--fl-accent); border-color: rgba(var(--fl-accent-rgb),0.38); background: rgba(var(--fl-accent-rgb),0.07); }
@@ -2311,8 +2344,8 @@
   /* ---- 七档阶梯 ---- */
   .fl-ladder { flex: none; width: 246px; text-align: right; }
   .fl-lad-h { display: flex; align-items: baseline; gap: 8px; justify-content: flex-end; }
-  .fl-lad-h i { font-style: normal; font-size: 10px; letter-spacing: 2.4px; color: var(--fl-dimmer); }
-  .fl-lad-h b { font-size: 15px; letter-spacing: 1.6px; color: var(--fl-accent); font-weight: 600; }
+  .fl-lad-h i { font-style: normal; font-size: calc(10px * var(--fl-fs, 1)); letter-spacing: 2.4px; color: var(--fl-dimmer); }
+  .fl-lad-h b { font-size: calc(15px * var(--fl-fs, 1)); letter-spacing: 1.6px; color: var(--fl-accent); font-weight: 600; }
   .fl-segs { display: flex; gap: 3px; margin: 9px 0 8px; }
   .fl-seg {
     flex: 1; height: 4px; border-radius: 1px; background: rgba(var(--fl-accent-rgb),0.18);
@@ -2320,8 +2353,8 @@
   }
   .fl-seg.on { background: linear-gradient(90deg, rgba(var(--fl-accent-rgb),0.55), var(--fl-accent)); }
   .fl-seg.cur { box-shadow: 0 0 10px rgba(var(--fl-accent-rgb),0.55); }
-  .fl-lad-f { font-size: 10.5px; letter-spacing: .6px; color: var(--fl-dim); }
-  .fl-lad-n { font-size: 10px; letter-spacing: .4px; color: var(--fl-dimmer); margin-top: 4px; }
+  .fl-lad-f { font-size: calc(10.5px * var(--fl-fs, 1)); letter-spacing: .6px; color: var(--fl-dim); }
+  .fl-lad-n { font-size: calc(10px * var(--fl-fs, 1)); letter-spacing: .4px; color: var(--fl-dimmer); margin-top: 4px; }
 
   /* ---- 六项指标 ---- */
   .fl-metrics {
@@ -2334,22 +2367,22 @@
     padding: 13px 18px 12px; min-width: 0;
   }
   .fl-metric i {
-    display: block; font-style: normal; font-size: 10px; letter-spacing: 2.6px;
+    display: block; font-style: normal; font-size: calc(10px * var(--fl-fs, 1)); letter-spacing: 2.6px;
     color: rgba(var(--fl-accent-rgb),0.6); margin-bottom: 6px;
   }
   .fl-metric b {
-    display: block; font-size: 22px; font-weight: 600; color: var(--fl-bright);
+    display: block; font-size: calc(22px * var(--fl-fs, 1)); font-weight: 600; color: var(--fl-bright);
     letter-spacing: .5px; line-height: 1.1; font-variant-numeric: tabular-nums;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .fl-metric b u { text-decoration: none; font-size: 11px; color: var(--fl-dimmer); margin-left: 3px; letter-spacing: 0; }
-  .fl-metric b small { font-size: 11px; color: var(--fl-dimmer); font-weight: 400; margin-left: 4px; letter-spacing: 1px; }
+  .fl-metric b u { text-decoration: none; font-size: calc(11px * var(--fl-fs, 1)); color: var(--fl-dimmer); margin-left: 3px; letter-spacing: 0; }
+  .fl-metric b small { font-size: calc(11px * var(--fl-fs, 1)); color: var(--fl-dimmer); font-weight: 400; margin-left: 4px; letter-spacing: 1px; }
   .fl-metric .fl-meter { height: 2px; margin-top: 9px; background: rgba(255,255,255,0.06); overflow: hidden; }
   .fl-metric .fl-meter s { display: block; height: 100%; text-decoration: none; background: linear-gradient(90deg, rgba(var(--fl-accent-rgb),0.55), var(--fl-accent)); }
   .fl-metric .fl-meter.good s { background: linear-gradient(90deg, rgba(143,191,122,0.5), var(--fl-ok)); }
   .fl-metric .fl-meter.bad s { background: linear-gradient(90deg, rgba(212,127,108,0.5), var(--fl-bad)); }
   /* 人口不是 0~100 的刻度，画进度条会让人以为是"填充度"，改用一行小字 */
-  .fl-metric .fl-metric-note { margin-top: 9px; font-size: 10px; line-height: 2px; color: var(--fl-dimmer); letter-spacing: .5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fl-metric .fl-metric-note { margin-top: 9px; font-size: calc(10px * var(--fl-fs, 1)); line-height: 2px; color: var(--fl-dimmer); letter-spacing: .5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .fl-pips { display: flex; gap: 4px; }
   .fl-box .fl-pips { max-width: 190px; }
   .fl-metric .fl-pips { margin-top: 9px; gap: 3px; }
@@ -2364,14 +2397,14 @@
     border-bottom: 1px solid var(--fl-line); background: var(--fl-bg2);
   }
   .fl-tab {
-    padding: 13px 16px 11px; font-size: 12.5px; letter-spacing: 3px; color: var(--fl-dimmer);
+    padding: 13px 16px 11px; font-size: calc(12.5px * var(--fl-fs, 1)); letter-spacing: 3px; color: var(--fl-dimmer);
     cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s ease;
     white-space: nowrap; user-select: none;
   }
   .fl-tab:hover { color: var(--fl-text); }
   .fl-tab.on { color: var(--fl-accent); border-bottom-color: var(--fl-accent); }
   .fl-tab u {
-    text-decoration: none; font-size: 9.5px; letter-spacing: 0; margin-left: 5px;
+    text-decoration: none; font-size: calc(9.5px * var(--fl-fs, 1)); letter-spacing: 0; margin-left: 5px;
     color: var(--fl-dimmer); font-variant-numeric: tabular-nums;
   }
   .fl-tab.on u { color: rgba(var(--fl-accent-rgb),0.7); }
@@ -2385,11 +2418,11 @@
   .fl-sec { margin-bottom: 26px; }
   .fl-sec-h { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
   .fl-sec-h span {
-    font-size: 11px; letter-spacing: 3.4px; color: rgba(var(--fl-accent-rgb),0.82); white-space: nowrap;
+    font-size: calc(11px * var(--fl-fs, 1)); letter-spacing: 3.4px; color: rgba(var(--fl-accent-rgb),0.82); white-space: nowrap;
   }
   .fl-sec-h s { flex: 1; height: 1px; background: linear-gradient(90deg, var(--fl-line2), transparent); }
   .fl-sec-h em {
-    font-style: normal; font-size: 10px; letter-spacing: .8px; color: var(--fl-dimmer);
+    font-style: normal; font-size: calc(10px * var(--fl-fs, 1)); letter-spacing: .8px; color: var(--fl-dimmer);
   }
 
   /* ---- 卡片 ---- */
@@ -2423,7 +2456,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: calc(11px * var(--fl-fs, 1));
   color: var(--fl-dimmer);
   border: 1px solid var(--fl-line);
   border-radius: 999px;
@@ -2442,7 +2475,7 @@
 }
 .fl-entry-btn {
   font: inherit;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--fl-fs, 1));
   letter-spacing: .06em;
   padding: 5px 13px;
   border-radius: 14px;
@@ -2471,12 +2504,12 @@
 }
 .fl-gov-cur-l {
   flex: none;
-  font-size: 10px;
+  font-size: calc(10px * var(--fl-fs, 1));
   letter-spacing: .12em;
   color: var(--fl-dimmer);
 }
-.fl-gov-cur b { font-size: 14px; color: var(--fl-accent); letter-spacing: .04em; }
-.fl-gov-cur em { font-style: normal; font-size: 11px; color: var(--fl-dim); }
+.fl-gov-cur b { font-size: calc(14px * var(--fl-fs, 1)); color: var(--fl-accent); letter-spacing: .04em; }
+.fl-gov-cur em { font-style: normal; font-size: calc(11px * var(--fl-fs, 1)); color: var(--fl-dim); }
 .fl-gov-cur-btns {
   margin-left: auto;
   display: flex;
@@ -2486,7 +2519,7 @@
 }
 .fl-gov-sm {
   padding: 3px 10px;
-  font-size: 11px;
+  font-size: calc(11px * var(--fl-fs, 1));
   line-height: 1.5;
 }
 
@@ -2506,17 +2539,17 @@
 .fl-gov-card.on { border-color: rgba(212, 175, 90, .6); background: rgba(212, 175, 90, .11); }
 .fl-gov-card.open { border-color: rgba(212, 175, 90, .55); }
 .fl-gov-t { display: flex; align-items: baseline; gap: 7px; }
-.fl-gov-n { font-size: 13px; color: var(--fl-ink); letter-spacing: .04em; }
+.fl-gov-n { font-size: calc(13px * var(--fl-fs, 1)); color: var(--fl-ink); letter-spacing: .04em; }
 .fl-gov-on {
   margin-left: auto;
-  font-size: 9.5px;
+  font-size: calc(9.5px * var(--fl-fs, 1));
   color: var(--fl-accent);
   border: 1px solid rgba(212, 175, 90, .45);
   border-radius: 3px;
   padding: 0 4px;
 }
-.fl-gov-tag { font-size: 10px; color: var(--fl-dimmer); margin-top: 3px; }
-.fl-gov-axis { font-size: 11px; color: var(--fl-dim); margin-top: 5px; line-height: 1.5; }
+.fl-gov-tag { font-size: calc(10px * var(--fl-fs, 1)); color: var(--fl-dimmer); margin-top: 3px; }
+.fl-gov-axis { font-size: calc(11px * var(--fl-fs, 1)); color: var(--fl-dim); margin-top: 5px; line-height: 1.5; }
 
 .fl-gov-detail {
   margin-top: 10px;
@@ -2525,18 +2558,18 @@
   border: 1px dashed rgba(212, 175, 90, .28);
   background: rgba(0, 0, 0, .14);
 }
-.fl-gov-dt { font-size: 13px; color: var(--fl-accent); letter-spacing: .05em; }
+.fl-gov-dt { font-size: calc(13px * var(--fl-fs, 1)); color: var(--fl-accent); letter-spacing: .05em; }
 .fl-gov-dt i {
   font-style: normal;
-  font-size: 9.5px;
+  font-size: calc(9.5px * var(--fl-fs, 1));
   color: var(--fl-dimmer);
   border: 1px solid var(--fl-line);
   border-radius: 3px;
   padding: 0 4px;
   margin-left: 6px;
 }
-.fl-gov-dd { font-size: 12px; color: var(--fl-dim); line-height: 1.7; margin-top: 7px; }
-.fl-gov-kv { display: flex; gap: 9px; font-size: 11.5px; margin-top: 6px; line-height: 1.6; }
+.fl-gov-dd { font-size: calc(12px * var(--fl-fs, 1)); color: var(--fl-dim); line-height: 1.7; margin-top: 7px; }
+.fl-gov-kv { display: flex; gap: 9px; font-size: calc(11.5px * var(--fl-fs, 1)); margin-top: 6px; line-height: 1.6; }
 .fl-gov-kv span { flex: none; width: 4.6em; color: var(--fl-dimmer); }
 .fl-gov-kv b { font-weight: 400; color: var(--fl-ink); }
 .fl-gov-acts { margin-top: 11px; display: flex; gap: 8px; flex-wrap: wrap; }
@@ -2547,7 +2580,7 @@
   flex: 1 1 auto;
   min-width: 0;
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--fl-fs, 1));
   padding: 7px 11px;
   border-radius: 7px;
   border: 1px solid var(--fl-line);
@@ -2568,22 +2601,22 @@
   -webkit-box-shadow: 0 0 0 1000px #14110b inset;
   transition: background-color 9999s ease-out;
 }
-.fl-gov-note { font-size: 11px; color: var(--fl-dimmer); margin-top: 7px; line-height: 1.65; }
+.fl-gov-note { font-size: calc(11px * var(--fl-fs, 1)); color: var(--fl-dimmer); margin-top: 7px; line-height: 1.65; }
 .fl-gov-note b { color: var(--fl-dim); font-weight: 400; }
 .fl-gov-note.err { color: #e08a7a; }
 #fl-gov-make[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
   .fl-card-n {
-    flex: 1; min-width: 0; font-size: 14px; letter-spacing: .8px; color: var(--fl-bright);
+    flex: 1; min-width: 0; font-size: calc(14px * var(--fl-fs, 1)); letter-spacing: .8px; color: var(--fl-bright);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .fl-card-m { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; align-items: center; }
   .fl-card-d {
-    margin-top: 8px; font-size: 11.5px; line-height: 1.7; color: rgba(var(--fl-text-rgb),0.44);
+    margin-top: 8px; font-size: calc(11.5px * var(--fl-fs, 1)); line-height: 1.7; color: rgba(var(--fl-text-rgb),0.44);
     max-height: 3.6em; overflow: hidden;
   }
   .fl-card-o {
     margin-top: 9px; padding-top: 8px; border-top: 1px dashed rgba(var(--fl-accent-rgb),0.12);
-    font-size: 11px; color: var(--fl-dim); display: flex; gap: 6px; align-items: baseline;
+    font-size: calc(11px * var(--fl-fs, 1)); color: var(--fl-dim); display: flex; gap: 6px; align-items: baseline;
   }
   .fl-card-o b { color: var(--fl-accent); font-weight: 600; font-variant-numeric: tabular-nums; flex: none; }
   .fl-card-o span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2600,7 +2633,7 @@
 
   /* ---- 药丸 ---- */
   .fl-pill {
-    font-size: 10px; padding: 2px 7px; border-radius: 2px; white-space: nowrap;
+    font-size: calc(10px * var(--fl-fs, 1)); padding: 2px 7px; border-radius: 2px; white-space: nowrap;
     letter-spacing: .6px; border: 1px solid currentColor; opacity: .95; flex: none;
     line-height: 1.5;
   }
@@ -2610,7 +2643,7 @@
   .fl-pill.st-plan { color: var(--fl-plan); }
   .fl-pill.st-other { color: var(--fl-dimmer); }
   .fl-tag {
-    font-size: 10px; letter-spacing: .5px; color: var(--fl-dimmer);
+    font-size: calc(10px * var(--fl-fs, 1)); letter-spacing: .5px; color: var(--fl-dimmer);
     border: 1px dashed rgba(var(--fl-text-rgb),0.18); padding: 1px 6px; border-radius: 2px;
   }
   .fl-tag.gold { color: rgba(var(--fl-accent-rgb),0.78); border-color: rgba(var(--fl-accent-rgb),0.28); }
@@ -2619,17 +2652,17 @@
   /* ---- 筛选条 ---- */
   .fl-chipbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 14px; }
   .fl-fchip {
-    cursor: pointer; font-size: 11px; letter-spacing: .9px; padding: 4px 10px; border-radius: 2px;
+    cursor: pointer; font-size: calc(11px * var(--fl-fs, 1)); letter-spacing: .9px; padding: 4px 10px; border-radius: 2px;
     border: 1px solid var(--fl-line); color: var(--fl-dim); transition: all .15s ease;
     display: flex; align-items: center; gap: 6px;
   }
   .fl-fchip:hover { color: var(--fl-text); border-color: var(--fl-line2); }
   .fl-fchip.on { color: var(--fl-accent); border-color: rgba(var(--fl-accent-rgb),0.42); background: rgba(var(--fl-accent-rgb),0.08); }
-  .fl-fchip u { text-decoration: none; font-size: 9.5px; color: var(--fl-dimmer); }
+  .fl-fchip u { text-decoration: none; font-size: calc(9.5px * var(--fl-fs, 1)); color: var(--fl-dimmer); }
   .fl-fchip i { width: 5px; height: 5px; border-radius: 50%; background: var(--fl-cat); display: block; }
   .fl-q {
     margin-left: auto; background: transparent; border: 1px solid var(--fl-line);
-    border-radius: 2px; color: var(--fl-text); font: inherit; font-size: 11.5px;
+    border-radius: 2px; color: var(--fl-text); font: inherit; font-size: calc(11.5px * var(--fl-fs, 1));
     padding: 5px 10px; outline: none; width: 180px; transition: border-color .16s;
   }
   .fl-q::placeholder { color: rgba(var(--fl-text-rgb),0.2); }
@@ -2638,13 +2671,13 @@
   /* ---- 键值行 ---- */
   .fl-kvs { display: flex; flex-direction: column; }
   .fl-kv {
-    display: flex; gap: 16px; padding: 8px 0; font-size: 12.5px; line-height: 1.7;
+    display: flex; gap: 16px; padding: 8px 0; font-size: calc(12.5px * var(--fl-fs, 1)); line-height: 1.7;
     border-bottom: 1px dashed rgba(var(--fl-accent-rgb),0.075);
   }
   .fl-kv:last-child { border-bottom: none; }
   .fl-kv k {
     flex: none; width: 68px; color: rgba(var(--fl-accent-rgb),0.62); letter-spacing: 1.4px;
-    font-size: 11px; font-family: var(--fl-serif); padding-top: 2px;
+    font-size: calc(11px * var(--fl-fs, 1)); font-family: var(--fl-serif); padding-top: 2px;
   }
   .fl-kv v { flex: 1; color: rgba(var(--fl-text-rgb),0.86); word-break: break-word; }
   .fl-kv v.mono { font-variant-numeric: tabular-nums; }
@@ -2657,7 +2690,7 @@
   }
   .fl-notice { display: flex; flex-direction: column; gap: 9px; }
   .fl-notice-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 26px; }
-  .fl-notice-r { display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; line-height: 1.75; }
+  .fl-notice-r { display: flex; gap: 10px; align-items: flex-start; font-size: calc(12.5px * var(--fl-fs, 1)); line-height: 1.75; }
   .fl-notice-r i {
     flex: none; width: 3px; height: 3px; border-radius: 50%; margin-top: 8px;
     background: rgba(var(--fl-accent-rgb),0.6);
@@ -2665,78 +2698,78 @@
   .fl-notice-r b { color: rgba(var(--fl-accent-rgb),0.86); font-weight: 500; letter-spacing: .5px; }
   .fl-notice-r span { color: rgba(var(--fl-text-rgb),0.82); }
 
-  .fl-space-h { display: flex; justify-content: space-between; align-items: baseline; font-size: 11px; letter-spacing: 1px; color: var(--fl-dim); }
-  .fl-space-h b { color: var(--fl-accent); font-variant-numeric: tabular-nums; letter-spacing: 0; font-size: 11.5px; }
+  .fl-space-h { display: flex; justify-content: space-between; align-items: baseline; font-size: calc(11px * var(--fl-fs, 1)); letter-spacing: 1px; color: var(--fl-dim); }
+  .fl-space-h b { color: var(--fl-accent); font-variant-numeric: tabular-nums; letter-spacing: 0; font-size: calc(11.5px * var(--fl-fs, 1)); }
   .fl-space-bar { height: 5px; margin-top: 8px; background: rgba(255,255,255,0.05); border-radius: 1px; overflow: hidden; }
   .fl-space-bar s { display: block; height: 100%; background: linear-gradient(90deg, rgba(var(--fl-accent-rgb),0.5), var(--fl-accent)); }
 
   /* ---- 账本 ---- */
   .fl-led-h { display: flex; gap: 26px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 18px; }
-  .fl-led-h .fl-big { font-size: 30px; letter-spacing: .5px; font-variant-numeric: tabular-nums; color: var(--fl-bright); font-weight: 600; line-height: 1; }
+  .fl-led-h .fl-big { font-size: calc(30px * var(--fl-fs, 1)); letter-spacing: .5px; font-variant-numeric: tabular-nums; color: var(--fl-bright); font-weight: 600; line-height: 1; }
   .fl-led-h .fl-big.pos { color: var(--fl-ok); }
   .fl-led-h .fl-big.neg { color: var(--fl-bad); }
-  .fl-led-h .fl-lbl { font-size: 10px; letter-spacing: 2.4px; color: var(--fl-dimmer); margin-bottom: 6px; }
+  .fl-led-h .fl-lbl { font-size: calc(10px * var(--fl-fs, 1)); letter-spacing: 2.4px; color: var(--fl-dimmer); margin-bottom: 6px; }
   .fl-ledger { border: 1px solid var(--fl-line); border-radius: 3px; overflow: hidden; background: rgba(20,17,12,0.5); }
   .fl-led-row {
     display: flex; align-items: baseline; gap: 14px; padding: 9px 16px;
-    border-bottom: 1px dashed rgba(var(--fl-accent-rgb),0.08); font-size: 12.5px;
+    border-bottom: 1px dashed rgba(var(--fl-accent-rgb),0.08); font-size: calc(12.5px * var(--fl-fs, 1));
   }
   .fl-led-row:last-child { border-bottom: none; }
   .fl-led-row.kind { background: rgba(var(--fl-accent-rgb),0.05); padding: 7px 16px; }
-  .fl-led-row.kind span { font-size: 10px; letter-spacing: 2.6px; color: rgba(var(--fl-accent-rgb),0.72); }
-  .fl-led-row.kind em { font-style: normal; margin-left: auto; font-size: 11px; color: var(--fl-dim); font-variant-numeric: tabular-nums; }
+  .fl-led-row.kind span { font-size: calc(10px * var(--fl-fs, 1)); letter-spacing: 2.6px; color: rgba(var(--fl-accent-rgb),0.72); }
+  .fl-led-row.kind em { font-style: normal; margin-left: auto; font-size: calc(11px * var(--fl-fs, 1)); color: var(--fl-dim); font-variant-numeric: tabular-nums; }
   .fl-led-row .n { flex: 1; color: rgba(var(--fl-text-rgb),0.84); }
   .fl-led-row .v { flex: none; font-variant-numeric: tabular-nums; letter-spacing: .3px; }
   .fl-led-row .v.in { color: var(--fl-ok); }
   .fl-led-row .v.out { color: var(--fl-bad); }
   .fl-led-row.total { background: rgba(var(--fl-accent-rgb),0.055); }
-  .fl-led-row.total .n { color: var(--fl-accent); letter-spacing: 1.4px; font-size: 11.5px; }
-  .fl-led-row.total .v { font-size: 14px; font-weight: 600; }
+  .fl-led-row.total .n { color: var(--fl-accent); letter-spacing: 1.4px; font-size: calc(11.5px * var(--fl-fs, 1)); }
+  .fl-led-row.total .v { font-size: calc(14px * var(--fl-fs, 1)); font-weight: 600; }
   .fl-led-warn {
-    margin-top: 10px; padding: 9px 13px; font-size: 11.5px; line-height: 1.7;
+    margin-top: 10px; padding: 9px 13px; font-size: calc(11.5px * var(--fl-fs, 1)); line-height: 1.7;
     color: var(--fl-warn); border-left: 2px solid rgba(220,190,106,0.5);
     background: rgba(220,190,106,0.05); border-radius: 0 2px 2px 0;
   }
   .fl-deltas { display: flex; flex-wrap: wrap; gap: 8px; }
   .fl-delta {
     display: flex; align-items: baseline; gap: 8px; padding: 7px 12px; border-radius: 2px;
-    border: 1px solid var(--fl-line); background: rgba(23,20,14,0.5); font-size: 12px;
+    border: 1px solid var(--fl-line); background: rgba(23,20,14,0.5); font-size: calc(12px * var(--fl-fs, 1));
   }
   .fl-delta b { font-variant-numeric: tabular-nums; font-weight: 700; }
   .fl-delta b.up { color: var(--fl-ok); }
   .fl-delta b.down { color: var(--fl-bad); }
-  .fl-delta span { color: var(--fl-dimmer); font-size: 11px; }
+  .fl-delta span { color: var(--fl-dimmer); font-size: calc(11px * var(--fl-fs, 1)); }
 
   .fl-timeline { position: relative; padding-left: 16px; }
   .fl-timeline::before {
     content: ""; position: absolute; left: 3px; top: 6px; bottom: 6px; width: 1px;
     background: linear-gradient(180deg, rgba(var(--fl-accent-rgb),0.3), rgba(var(--fl-accent-rgb),0.04));
   }
-  .fl-tl { position: relative; padding: 0 0 14px; font-size: 12.5px; line-height: 1.75; color: rgba(var(--fl-text-rgb),0.82); }
+  .fl-tl { position: relative; padding: 0 0 14px; font-size: calc(12.5px * var(--fl-fs, 1)); line-height: 1.75; color: rgba(var(--fl-text-rgb),0.82); }
   .fl-tl:last-child { padding-bottom: 0; }
   .fl-tl::before {
     content: ""; position: absolute; left: -16px; top: 7px; width: 5px; height: 5px;
     border-radius: 50%; background: var(--fl-bg); border: 1px solid rgba(var(--fl-accent-rgb),0.55);
   }
-  .fl-tl em { font-style: normal; color: rgba(var(--fl-accent-rgb),0.66); font-size: 11px; margin-right: 8px; }
+  .fl-tl em { font-style: normal; color: rgba(var(--fl-accent-rgb),0.66); font-size: calc(11px * var(--fl-fs, 1)); margin-right: 8px; }
 
   .fl-verdict {
-    padding: 14px 16px; border-radius: 3px; font-size: 12.5px; line-height: 1.8;
+    padding: 14px 16px; border-radius: 3px; font-size: calc(12.5px * var(--fl-fs, 1)); line-height: 1.8;
     color: rgba(var(--fl-text-rgb),0.86); background: rgba(143,169,207,0.055);
     border-left: 2px solid rgba(143,169,207,0.42);
   }
-  .fl-verdict b { display: block; font-size: 10px; letter-spacing: 2.6px; color: var(--fl-plan); margin-bottom: 7px; font-weight: 500; }
+  .fl-verdict b { display: block; font-size: calc(10px * var(--fl-fs, 1)); letter-spacing: 2.6px; color: var(--fl-plan); margin-bottom: 7px; font-weight: 500; }
 
   /* ---- 空态 ---- */
   .fl-empty {
     padding: 54px 26px; text-align: center; color: rgba(var(--fl-text-rgb),0.4);
-    font-size: 12.5px; line-height: 2;
+    font-size: calc(12.5px * var(--fl-fs, 1)); line-height: 2;
   }
   .fl-empty b {
-    display: block; font-size: 26px; color: rgba(var(--fl-accent-rgb),0.24);
+    display: block; font-size: calc(26px * var(--fl-fs, 1)); color: rgba(var(--fl-accent-rgb),0.24);
     margin-bottom: 14px; letter-spacing: 6px; font-weight: 400;
   }
-  .fl-empty small { display: block; font-size: 11px; opacity: .8; margin-top: 6px; }
+  .fl-empty small { display: block; font-size: calc(11px * var(--fl-fs, 1)); opacity: .8; margin-top: 6px; }
 
   /* ---- 抽屉 ---- */
   .fl-scrim {
@@ -2765,39 +2798,39 @@
   }
   .fl-dr-ic svg { width: 22px; height: 22px; }
   .fl-dr-t { flex: 1; min-width: 0; }
-  .fl-dr-n { font-size: 19px; letter-spacing: 1.4px; color: var(--fl-bright); line-height: 1.35; word-break: break-word; }
-  .fl-dr-s { margin-top: 6px; font-size: 11px; color: var(--fl-dimmer); letter-spacing: .7px; }
+  .fl-dr-n { font-size: calc(19px * var(--fl-fs, 1)); letter-spacing: 1.4px; color: var(--fl-bright); line-height: 1.35; word-break: break-word; }
+  .fl-dr-s { margin-top: 6px; font-size: calc(11px * var(--fl-fs, 1)); color: var(--fl-dimmer); letter-spacing: .7px; }
   .fl-dr-x {
     flex: none; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
-    cursor: pointer; color: var(--fl-dimmer); border-radius: 50%; font-size: 17px; line-height: 1;
+    cursor: pointer; color: var(--fl-dimmer); border-radius: 50%; font-size: calc(17px * var(--fl-fs, 1)); line-height: 1;
   }
   .fl-dr-x:hover { color: #fff; background: rgba(var(--fl-accent-rgb),0.1); }
   .fl-dr-b { flex: 1; overflow-y: auto; padding: 18px 22px 26px; }
   .fl-dr-b::-webkit-scrollbar { width: 7px; }
   .fl-dr-b::-webkit-scrollbar-thumb { background: rgba(var(--fl-accent-rgb),0.16); border-radius: 4px; }
   .fl-fx { display: flex; flex-direction: column; gap: 10px; }
-  .fl-fx-r { display: flex; gap: 10px; font-size: 12.5px; line-height: 1.75; }
+  .fl-fx-r { display: flex; gap: 10px; font-size: calc(12.5px * var(--fl-fs, 1)); line-height: 1.75; }
   .fl-fx-r b {
     flex: none; min-width: 76px; max-width: 40%; color: rgba(var(--fl-accent-rgb),0.82);
     font-weight: 500; letter-spacing: .5px;
   }
   .fl-fx-r span { flex: 1; color: rgba(var(--fl-text-rgb),0.8); }
-  .fl-desc { font-size: 12.5px; line-height: 1.9; color: rgba(var(--fl-text-rgb),0.76); }
+  .fl-desc { font-size: calc(12.5px * var(--fl-fs, 1)); line-height: 1.9; color: rgba(var(--fl-text-rgb),0.76); }
   .fl-note {
     width: 100%; box-sizing: border-box; min-height: 76px; resize: vertical;
     background: rgba(10,9,6,0.6); border: 1px solid var(--fl-line); border-radius: 3px;
-    color: var(--fl-text); font: inherit; font-size: 12.5px; padding: 10px 12px;
+    color: var(--fl-text); font: inherit; font-size: calc(12.5px * var(--fl-fs, 1)); padding: 10px 12px;
     outline: none; line-height: 1.75; transition: border-color .16s;
   }
   .fl-note::placeholder { color: rgba(var(--fl-text-rgb),0.2); }
   .fl-note:focus { border-color: var(--fl-line2); }
-  .fl-hint { font-size: 10px; color: rgba(var(--fl-text-rgb),0.24); margin-top: 6px; letter-spacing: .4px; }
+  .fl-hint { font-size: calc(10px * var(--fl-fs, 1)); color: rgba(var(--fl-text-rgb),0.24); margin-top: 6px; letter-spacing: .4px; }
 
   /* ---- 底栏 ---- */
   .fl-foot {
     flex: none; display: flex; align-items: center; gap: 14px;
     padding: 8px 26px; border-top: 1px solid var(--fl-line);
-    background: var(--fl-bg2); font-size: 10.5px; letter-spacing: .5px;
+    background: var(--fl-bg2); font-size: calc(10.5px * var(--fl-fs, 1)); letter-spacing: .5px;
     color: rgba(var(--fl-text-rgb),0.34);
   }
   .fl-foot b { color: rgba(var(--fl-accent-rgb),0.75); font-weight: 500; }
@@ -2839,13 +2872,13 @@
   .fl-nav-i.on::before { width: 58%; }
   .fl-nav-i svg { width: 19px; height: 19px; display: block; flex: none; }
   .fl-nav-i b {
-    font-size: 11.5px; font-weight: 400; letter-spacing: 1.6px; line-height: 1;
+    font-size: calc(11.5px * var(--fl-fs, 1)); font-weight: 400; letter-spacing: 1.6px; line-height: 1;
     white-space: nowrap; font-family: var(--fl-serif);
   }
   /* 「内测」角标跟标签同一行、抬起半格当上标：贴在格子顶角会跟分隔线打架 */
   .fl-nav-lb { display: inline-flex; align-items: center; gap: 3px; }
   .fl-nav-i .fl-nav-tag {
-    font-size: 7.5px; letter-spacing: 0; line-height: 1; padding: 1.5px 3px;
+    font-size: calc(7.5px * var(--fl-fs, 1)); letter-spacing: 0; line-height: 1; padding: 1.5px 3px;
     border-radius: 2px; color: var(--fl-warn);
     border: 1px solid rgba(220,190,106,0.4); background: rgba(220,190,106,0.10);
     transform: translateY(-3px);
@@ -2853,18 +2886,18 @@
 
   /* ---- 外交 ---- */
   .fl-dip-h { display: flex; align-items: baseline; gap: 10px; margin: 0 0 10px; }
-  .fl-dip-h b { font-size: 13px; letter-spacing: 3px; color: var(--fl-accent); font-weight: 400; }
-  .fl-dip-h em { font-style: normal; font-size: 9.5px; letter-spacing: 1.6px; color: var(--fl-dimmer); text-transform: uppercase; }
+  .fl-dip-h b { font-size: calc(13px * var(--fl-fs, 1)); letter-spacing: 3px; color: var(--fl-accent); font-weight: 400; }
+  .fl-dip-h em { font-style: normal; font-size: calc(9.5px * var(--fl-fs, 1)); letter-spacing: 1.6px; color: var(--fl-dimmer); text-transform: uppercase; }
   .fl-dip-h s { flex: 1; height: 1px; background: var(--fl-line); text-decoration: none; }
   .fl-dip-row {
     display: flex; align-items: center; gap: 10px; padding: 11px 13px;
     background: var(--fl-surface); border: 1px solid var(--fl-line); border-radius: 2px;
     margin-bottom: 7px;
   }
-  .fl-dip-nm { flex: 1; min-width: 0; font-size: 13px; line-height: 1.5; color: var(--fl-text); overflow: hidden; text-overflow: ellipsis; }
-  .fl-dip-nm small { display: block; font-size: 10.5px; line-height: 1.5; color: var(--fl-dimmer); margin-top: 2px; }
+  .fl-dip-nm { flex: 1; min-width: 0; font-size: calc(13px * var(--fl-fs, 1)); line-height: 1.5; color: var(--fl-text); overflow: hidden; text-overflow: ellipsis; }
+  .fl-dip-nm small { display: block; font-size: calc(10.5px * var(--fl-fs, 1)); line-height: 1.5; color: var(--fl-dimmer); margin-top: 2px; }
   .fl-dip-at {
-    flex: none; font-size: 10px; letter-spacing: 1px; padding: 3px 8px; border-radius: 2px;
+    flex: none; font-size: calc(10px * var(--fl-fs, 1)); letter-spacing: 1px; padding: 3px 8px; border-radius: 2px;
     border: 1px solid currentColor;
   }
   .fl-dip-at.ok { color: var(--fl-ok); }
@@ -2879,11 +2912,11 @@
   }
   .fl-kv:last-child { border-bottom: 0; }
   .fl-kv .k {
-    flex: none; width: 86px; font-size: 11px; letter-spacing: 1.4px;
+    flex: none; width: 86px; font-size: calc(11px * var(--fl-fs, 1)); letter-spacing: 1.4px;
     color: var(--fl-dimmer);
   }
   .fl-kv .v {
-    flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.6;
+    flex: 1; min-width: 0; font-size: calc(12.5px * var(--fl-fs, 1)); line-height: 1.6;
     color: rgba(var(--fl-text-rgb),0.9); word-break: break-word;
   }
 
@@ -2894,27 +2927,27 @@
   .fl-tl.add::before { background: var(--fl-ok); border-color: var(--fl-ok); box-shadow: 0 0 6px rgba(143,191,122,.6); }
   .fl-tl.rm::before { background: var(--fl-bad); border-color: var(--fl-bad); }
   .fl-tl .nm { color: rgba(var(--fl-text-rgb),0.94); }
-  .fl-tl .kd { color: var(--fl-dimmer); font-size: 9.5px; letter-spacing: 1.2px; margin-left: 7px; }
-  .fl-tl .tx { margin-top: 2px; font-size: 12px; line-height: 1.65; color: rgba(var(--fl-text-rgb),0.62); }
+  .fl-tl .kd { color: var(--fl-dimmer); font-size: calc(9.5px * var(--fl-fs, 1)); letter-spacing: 1.2px; margin-left: 7px; }
+  .fl-tl .tx { margin-top: 2px; font-size: calc(12px * var(--fl-fs, 1)); line-height: 1.65; color: rgba(var(--fl-text-rgb),0.62); }
 
   /* ---- 自检 ---- */
-  .fl-diag-h { font-size: 10.5px; letter-spacing: 3.2px; color: rgba(var(--fl-accent-rgb),0.8); margin: 22px 0 8px; }
+  .fl-diag-h { font-size: calc(10.5px * var(--fl-fs, 1)); letter-spacing: 3.2px; color: rgba(var(--fl-accent-rgb),0.8); margin: 22px 0 8px; }
   .fl-diag-h:first-child { margin-top: 0; }
   .fl-diag-row {
-    display: flex; gap: 14px; padding: 7px 0; font-size: 12.5px; line-height: 1.65;
+    display: flex; gap: 14px; padding: 7px 0; font-size: calc(12.5px * var(--fl-fs, 1)); line-height: 1.65;
     border-bottom: 1px dashed rgba(var(--fl-accent-rgb),0.08);
   }
-  .fl-diag-k { flex: none; width: 104px; color: rgba(var(--fl-accent-rgb),0.62); letter-spacing: .8px; font-size: 11.5px; }
+  .fl-diag-k { flex: none; width: 104px; color: rgba(var(--fl-accent-rgb),0.62); letter-spacing: .8px; font-size: calc(11.5px * var(--fl-fs, 1)); }
   .fl-diag-v { flex: 1; color: rgba(var(--fl-text-rgb),0.82); word-break: break-word; }
   .fl-diag-v code {
-    font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: #cbdcb4;
+    font-family: ui-monospace, Consolas, monospace; font-size: calc(11px * var(--fl-fs, 1)); color: #cbdcb4;
     background: rgba(255,255,255,0.035); padding: 1px 5px; border-radius: 2px;
   }
   .fl-diag-v .dg-ok { color: var(--fl-ok); }
   .fl-diag-v .dg-bad { color: var(--fl-bad); }
   .fl-diag-v .dg-warn { color: var(--fl-warn); }
   .fl-diag-note {
-    margin-top: 20px; padding: 13px 16px; font-size: 11.5px; line-height: 1.9;
+    margin-top: 20px; padding: 13px 16px; font-size: calc(11.5px * var(--fl-fs, 1)); line-height: 1.9;
     color: rgba(var(--fl-text-rgb),0.6); background: rgba(var(--fl-accent-rgb),0.045);
     border-left: 2px solid rgba(var(--fl-accent-rgb),0.3); border-radius: 0 3px 3px 0;
   }
@@ -2933,10 +2966,26 @@
      三档：宽屏并排 → 中屏折行 → 手机整块重排。
      手机上全部单位缩小、栅格降列、标题允许换行，宁可多一行也不横向溢出。 */
 
+  /* 宽屏：内容收进中间一列，别让人从左边一路扫到右边（手机上保持原样，单列本来就满宽） */
+  @media (min-width: 1180px) {
+    .fl-hero, .fl-metrics, .fl-tabs, .fl-archbar, .fl-view {
+      width: 100%; max-width: 1080px;
+      margin-left: auto; margin-right: auto;
+    }
+    .fl-top {
+      padding-left: max(26px, calc((100% - 1080px) / 2));
+      padding-right: max(26px, calc((100% - 1080px) / 2));
+    }
+    .fl-nav {
+      padding-left: max(0px, calc((100% - 1080px) / 2));
+      padding-right: max(0px, calc((100% - 1080px) / 2));
+    }
+  }
+
   @media (max-width: 1180px) {
     .fl-ladder { width: 200px; }
     .fl-crest { width: 72px; height: 86px; }
-    .fl-hname { font-size: 26px; }
+    .fl-hname { font-size: calc(26px * var(--fl-fs, 1)); }
     .fl-metrics { grid-template-columns: repeat(3, 1fr); }
   }
 
@@ -2944,7 +2993,7 @@
     .fl-hero { flex-wrap: wrap; gap: 14px 18px; padding: 18px 20px 14px; }
     .fl-crest { width: 60px; height: 72px; }
     .fl-hmain { flex: 1 1 240px; }
-    .fl-hname { font-size: 21px; letter-spacing: 1.4px; }
+    .fl-hname { font-size: calc(21px * var(--fl-fs, 1)); letter-spacing: 1.4px; }
     .fl-ladder { width: 100%; text-align: left; }
     .fl-lad-h { justify-content: flex-start; }
     .fl-top { flex-wrap: wrap; gap: 10px; padding: 10px 16px; }
@@ -2967,29 +3016,29 @@
         /* 顶栏：一行装下 */
         .fl-top { padding: 5px 10px; gap: 5px 8px; }
         .fl-brand { gap: 5px; }
-        .fl-brand b { font-size: 12px; letter-spacing: 2.2px; }
+        .fl-brand b { font-size: calc(12px * var(--fl-fs, 1)); letter-spacing: 2.2px; }
         .fl-brand em { display: none; }
         .fl-top-r { gap: 5px; }
-        .fl-btn { font-size: 10.5px; letter-spacing: .2px; padding: 4px 7px; }
-        .fl-switch { font-size: 10.5px; gap: 3px; letter-spacing: 0; }
+        .fl-btn { font-size: calc(10.5px * var(--fl-fs, 1)); letter-spacing: .2px; padding: 4px 7px; }
+        .fl-switch { font-size: calc(10.5px * var(--fl-fs, 1)); gap: 3px; letter-spacing: 0; }
         .fl-switch input { width: 14px; height: 14px; }
         /* 工作台在手机上：一屏两面，色板两列 */
         .fl-set-top { padding: 7px 10px; gap: 8px; }
-        .fl-set-title { font-size: 12px; letter-spacing: 3px; }
-        .fl-set-tab { font-size: 11px; padding: 4px 9px; letter-spacing: 1px; }
+        .fl-set-title { font-size: calc(12px * var(--fl-fs, 1)); letter-spacing: 3px; }
+        .fl-set-tab { font-size: calc(11px * var(--fl-fs, 1)); padding: 4px 9px; letter-spacing: 1px; }
         .fl-set-body { padding: 13px 12px 30px; }
         .fl-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
         .fl-opt { padding: 6px 8px; gap: 7px; }
-        .fl-opt u { font-size: 11px; }
+        .fl-opt u { font-size: calc(11px * var(--fl-fs, 1)); }
         .fl-sw { width: 18px; height: 18px; }
         .fl-sec { margin-bottom: 17px; }
-        .fl-close2 { width: 24px; height: 24px; font-size: 15px; }
+        .fl-close2 { width: 24px; height: 24px; font-size: calc(15px * var(--fl-fs, 1)); }
         .fl-domsel {
           order: 3; width: 100%; margin-left: 0; flex-wrap: nowrap;
           overflow-x: auto; gap: 4px; -webkit-overflow-scrolling: touch;
         }
         .fl-domsel::-webkit-scrollbar { display: none; }
-        .fl-domchip { flex: none; font-size: 10.5px; padding: 2px 8px; }
+        .fl-domchip { flex: none; font-size: calc(10.5px * var(--fl-fs, 1)); padding: 2px 8px; }
     
         /* 头图：纹章缩到 34，名称一行，标签横滑不换行 */
         .fl-hero {
@@ -3000,11 +3049,11 @@
         .fl-crest { grid-area: crest; width: 34px; height: 40px; }
         .fl-hmain { grid-area: main; flex: none; }
         .fl-hname {
-          font-size: 15px; letter-spacing: .3px; line-height: 1.3;
+          font-size: calc(15px * var(--fl-fs, 1)); letter-spacing: .3px; line-height: 1.3;
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .fl-hsub {
-          font-size: 9px; margin-top: 2px; letter-spacing: .2px;
+          font-size: calc(9px * var(--fl-fs, 1)); margin-top: 2px; letter-spacing: .2px;
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .fl-chips {
@@ -3014,7 +3063,7 @@
           mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent);
         }
         .fl-chips::-webkit-scrollbar { display: none; }
-        .fl-chip { flex: none; font-size: 9.5px; padding: 1px 6px; letter-spacing: 0; }
+        .fl-chip { flex: none; font-size: calc(9.5px * var(--fl-fs, 1)); padding: 1px 6px; letter-spacing: 0; }
     
         /* 七档阶梯：与规模并成一行 */
         .fl-ladder {
@@ -3022,11 +3071,11 @@
           gap: 7px; width: 100%; text-align: left; padding: 0;
         }
         .fl-lad-h { flex: none; justify-content: flex-start; gap: 4px; }
-        .fl-lad-h i { font-size: 8.5px; letter-spacing: .8px; }
-        .fl-lad-h b { font-size: 11.5px; letter-spacing: .2px; }
+        .fl-lad-h i { font-size: calc(8.5px * var(--fl-fs, 1)); letter-spacing: .8px; }
+        .fl-lad-h b { font-size: calc(11.5px * var(--fl-fs, 1)); letter-spacing: .2px; }
         .fl-segs { display: none; }
         .fl-lad-f {
-          flex: 1 1 auto; min-width: 0; font-size: 9px; letter-spacing: 0;
+          flex: 1 1 auto; min-width: 0; font-size: calc(9px * var(--fl-fs, 1)); letter-spacing: 0;
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right;
         }
         .fl-lad-n { display: none; }
@@ -3037,10 +3086,10 @@
           background: rgba(var(--fl-accent-rgb),0.18); gap: 1px;
         }
         .fl-metric { position: relative; padding: 5px 2px 8px; text-align: center; }
-        .fl-metric i { font-size: 7.5px; letter-spacing: 0; margin-bottom: 2px; }
-        .fl-metric b { font-size: 11.5px; letter-spacing: -.3px; }
+        .fl-metric i { font-size: calc(7.5px * var(--fl-fs, 1)); letter-spacing: 0; margin-bottom: 2px; }
+        .fl-metric b { font-size: calc(11.5px * var(--fl-fs, 1)); letter-spacing: -.3px; }
         .fl-metric b u { display: none; }
-        .fl-metric b small { font-size: 7.5px; margin-left: 1px; letter-spacing: 0; }
+        .fl-metric b small { font-size: calc(7.5px * var(--fl-fs, 1)); margin-left: 1px; letter-spacing: 0; }
         .fl-metric b small.fl-cur { display: none; }
         .fl-metric .fl-meter,
         .fl-metric .fl-pips {
@@ -3050,77 +3099,77 @@
     
         /* 页签：矮一点 */
         .fl-tabs { padding: 0 4px; box-shadow: 0 6px 12px -8px rgba(0,0,0,.9); }
-        .fl-tab { padding: 7px 8px 6px; font-size: 11px; letter-spacing: 1px; }
-        .fl-tab u { font-size: 8px; margin-left: 2px; }
+        .fl-tab { padding: 7px 8px 6px; font-size: calc(11px * var(--fl-fs, 1)); letter-spacing: 1px; }
+        .fl-tab u { font-size: calc(8px * var(--fl-fs, 1)); margin-left: 2px; }
     
         /* 内容：把省下来的空间全给这里 */
         .fl-view { padding: 9px 10px 22px; }
         .fl-sec { margin-bottom: 15px; }
         .fl-sec-h { gap: 8px; margin-bottom: 7px; }
-        .fl-sec-h span { font-size: 10px; letter-spacing: 1.8px; }
-        .fl-sec-h em, .fl-sec-h small, .fl-sec-h i { font-size: 9.5px; }
+        .fl-sec-h span { font-size: calc(10px * var(--fl-fs, 1)); letter-spacing: 1.8px; }
+        .fl-sec-h em, .fl-sec-h small, .fl-sec-h i { font-size: calc(9.5px * var(--fl-fs, 1)); }
         .fl-box { padding: 10px 11px; border-radius: 3px; }
-        .fl-kv { padding: 6px 0; gap: 10px; font-size: 12px; }
-        .fl-kv k { width: 62px; font-size: 10.5px; letter-spacing: .6px; }
+        .fl-kv { padding: 6px 0; gap: 10px; font-size: calc(12px * var(--fl-fs, 1)); }
+        .fl-kv k { width: 62px; font-size: calc(10.5px * var(--fl-fs, 1)); letter-spacing: .6px; }
         .fl-notice { gap: 7px; }
-        .fl-notice-r { font-size: 12px; line-height: 1.75; gap: 7px; }
-        .fl-desc { font-size: 12px; line-height: 1.8; }
+        .fl-notice-r { font-size: calc(12px * var(--fl-fs, 1)); line-height: 1.75; gap: 7px; }
+        .fl-desc { font-size: calc(12px * var(--fl-fs, 1)); line-height: 1.8; }
         .fl-catnote { display: none; }
     
         /* 建筑卡片 */
         .fl-cards { gap: 7px; }
         .fl-card { padding: 10px 11px 9px; }
-        .fl-card-n { font-size: 13px; letter-spacing: .3px; }
+        .fl-card-n { font-size: calc(13px * var(--fl-fs, 1)); letter-spacing: .3px; }
         .fl-card-m { gap: 5px; margin-top: 6px; }
-        .fl-card-d { font-size: 11px; margin-top: 5px; }
-        .fl-card-o { font-size: 11px; }
-        .fl-fchip { font-size: 10.5px; padding: 4px 8px; }
+        .fl-card-d { font-size: calc(11px * var(--fl-fs, 1)); margin-top: 5px; }
+        .fl-card-o { font-size: calc(11px * var(--fl-fs, 1)); }
+        .fl-fchip { font-size: calc(10.5px * var(--fl-fs, 1)); padding: 4px 8px; }
     
         /* 账本 */
         .fl-led-h { gap: 12px; margin-bottom: 12px; }
-        .fl-led-h .fl-big { font-size: 21px; }
-        .fl-led-h .fl-lbl { font-size: 9px; letter-spacing: 1.4px; margin-bottom: 4px; }
-        .fl-led-row { padding: 6px 9px; gap: 8px; font-size: 12px; }
+        .fl-led-h .fl-big { font-size: calc(21px * var(--fl-fs, 1)); }
+        .fl-led-h .fl-lbl { font-size: calc(9px * var(--fl-fs, 1)); letter-spacing: 1.4px; margin-bottom: 4px; }
+        .fl-led-row { padding: 6px 9px; gap: 8px; font-size: calc(12px * var(--fl-fs, 1)); }
         .fl-led-row.kind { padding: 5px 9px; }
         .fl-led-row .n { word-break: break-word; }
-        .fl-led-row .v { font-size: 11.5px; }
+        .fl-led-row .v { font-size: calc(11.5px * var(--fl-fs, 1)); }
     
         /* 抽屉：整屏 */
         .fl-drawer { width: 100%; max-width: 100%; }
         .fl-dr-h { padding: 14px 13px 11px; gap: 9px; }
         .fl-dr-ic { width: 32px; height: 32px; }
         .fl-dr-ic svg { width: 17px; height: 17px; }
-        .fl-dr-n { font-size: 14.5px; letter-spacing: .3px; }
+        .fl-dr-n { font-size: calc(14.5px * var(--fl-fs, 1)); letter-spacing: .3px; }
         .fl-dr-b { padding: 11px 13px 20px; }
-        .fl-fx-r { font-size: 12px; gap: 8px; }
+        .fl-fx-r { font-size: calc(12px * var(--fl-fs, 1)); gap: 8px; }
         .fl-fx-r b { min-width: 58px; }
     
         /* 底栏：只留最短的一行 */
-        .fl-foot { padding: 4px 10px; font-size: 9px; letter-spacing: .1px; gap: 6px; }
+        .fl-foot { padding: 4px 10px; font-size: calc(9px * var(--fl-fs, 1)); letter-spacing: .1px; gap: 6px; }
         .fl-foot .fl-live { display: none; }
     
         /* 底部导航：手机上要能一指按中，高度不低于 46px */
         .fl-nav-i { padding: 6px 1px 5px; gap: 3px; }
         .fl-nav-i svg { width: 18px; height: 18px; }
-        .fl-nav-i b { font-size: 10.5px; letter-spacing: 1px; }
-        .fl-nav-i .fl-nav-tag { font-size: 7px; padding: 1px 2.5px; }
+        .fl-nav-i b { font-size: calc(10.5px * var(--fl-fs, 1)); letter-spacing: 1px; }
+        .fl-nav-i .fl-nav-tag { font-size: calc(7px * var(--fl-fs, 1)); padding: 1px 2.5px; }
         .fl-dip-row { padding: 9px 10px; gap: 8px; }
-        .fl-dip-nm { font-size: 12px; }
+        .fl-dip-nm { font-size: calc(12px * var(--fl-fs, 1)); }
       }
 
     @media (max-width: 380px) {
-        .fl-brand b { font-size: 11px; letter-spacing: 1.6px; }
-        .fl-btn { font-size: 10px; padding: 4px 6px; }
+        .fl-brand b { font-size: calc(11px * var(--fl-fs, 1)); letter-spacing: 1.6px; }
+        .fl-btn { font-size: calc(10px * var(--fl-fs, 1)); padding: 4px 6px; }
         .fl-crest { width: 30px; height: 35px; }
         .fl-hero { grid-template-columns: 30px 1fr; }
-        .fl-hname { font-size: 14px; }
+        .fl-hname { font-size: calc(14px * var(--fl-fs, 1)); }
         .fl-metric { padding: 5px 2px 8px; }
-        .fl-metric b { font-size: 11.5px; }
-        .fl-metric i { font-size: 7.5px; }
-        .fl-tab { padding: 7px 6px 6px; font-size: 10.5px; letter-spacing: .6px; }
-        .fl-nav-i b { font-size: 9.5px; letter-spacing: .4px; }
+        .fl-metric b { font-size: calc(11.5px * var(--fl-fs, 1)); }
+        .fl-metric i { font-size: calc(7.5px * var(--fl-fs, 1)); }
+        .fl-tab { padding: 7px 6px 6px; font-size: calc(10.5px * var(--fl-fs, 1)); letter-spacing: .6px; }
+        .fl-nav-i b { font-size: calc(9.5px * var(--fl-fs, 1)); letter-spacing: .4px; }
         .fl-nav-i svg { width: 17px; height: 17px; }
-        .fl-nav-i .fl-nav-tag { font-size: 6.5px; padding: 1px 2px; transform: none; }
+        .fl-nav-i .fl-nav-tag { font-size: calc(6.5px * var(--fl-fs, 1)); padding: 1px 2px; transform: none; }
       }
 
   `;
@@ -3337,6 +3386,7 @@
       + 'isolation:isolate;-webkit-tap-highlight-color:transparent;';
     // 主题：color, accent-rgb, 暗底四层、文字、星标球面，一次写全
     applyAccent(prefs.accent);
+    applyLook();
     (doc.body || doc.documentElement).appendChild(root);
 
     star = el('button', null, `
@@ -3439,6 +3489,38 @@
               <div class="fl-sec-h">字 体 颜 色<em>Ink</em><span></span></div>
               <div class="fl-grid" id="fl-ink"></div>
               <div class="fl-sec-note">「跟随主题」会按主色算出一档协调的暖白/冷白；也可以固定成某个颜色。</div>
+            </div>
+            <div class="fl-sec">
+              <div class="fl-sec-h">字 号<em>Scale</em><span></span></div>
+              <div class="fl-fsrow">
+                <input type="range" id="fl-fs-range" min="85" max="135" step="5" value="100">
+                <b id="fl-fs-num">100%</b>
+              </div>
+              <div class="fl-sec-note">正文、标签、数字一起放大缩小。觉得字小就往右拉。</div>
+            </div>
+            <div class="fl-sec">
+              <div class="fl-sec-h">字 体<em>Typeface</em><span></span></div>
+              <div class="fl-grid">
+                <label class="fl-opt" id="fl-opt-serif">
+                  <input type="radio" name="fl-font" value="serif">
+                  <u>宋体</u>
+                </label>
+                <label class="fl-opt" id="fl-opt-sans">
+                  <input type="radio" name="fl-font" value="sans">
+                  <u>无衬线</u>
+                </label>
+              </div>
+              <div class="fl-sec-note">宋体在暗底上笔画细，看着累就换无衬线。</div>
+            </div>
+            <div class="fl-sec">
+              <div class="fl-sec-h">对 比 度<em>Contrast</em><span></span></div>
+              <div class="fl-grid">
+                <label class="fl-opt" id="fl-opt-contrast">
+                  <input type="checkbox" id="fl-contrast">
+                  <u>增强次要文字</u>
+                </label>
+              </div>
+              <div class="fl-sec-note">开启后灰色小字提亮一档，长时间看不容易累。</div>
             </div>
             <div class="fl-preview">
               <b>时钟塔城</b>
@@ -3602,6 +3684,56 @@
 
     themeColor = screen.querySelector('#fl-color');
     inkColor = screen.querySelector('#fl-ink-color');
+
+    /* ---- 字号 / 字体 / 对比度 ---- */
+    const fsRange = screen.querySelector('#fl-fs-range');
+    const fsNum = screen.querySelector('#fl-fs-num');
+    const fontRadios = screen.querySelectorAll('input[name="fl-font"]');
+    const contrastBox = screen.querySelector('#fl-contrast');
+
+    const syncTypeUI = () => {
+      const fs = Math.max(85, Math.min(135, Number(prefs.fs) || 100));
+      if (fsRange) fsRange.value = String(fs);
+      if (fsNum) fsNum.textContent = fs + '%';
+      if (fontRadios && fontRadios.forEach) {
+        fontRadios.forEach((r) => { r.checked = (r.value === prefs.font); });
+      }
+      const oSerif = screen.querySelector('#fl-opt-serif');
+      const oSans = screen.querySelector('#fl-opt-sans');
+      if (oSerif) oSerif.classList.toggle('on', prefs.font !== 'sans');
+      if (oSans) oSans.classList.toggle('on', prefs.font === 'sans');
+      if (contrastBox) contrastBox.checked = !!prefs.contrast;
+      const oCon = screen.querySelector('#fl-opt-contrast');
+      if (oCon) oCon.classList.toggle('on', !!prefs.contrast);
+    };
+
+    if (fsRange) fsRange.addEventListener('input', () => {
+      prefs.fs = Math.max(85, Math.min(135, Number(fsRange.value) || 100));
+      if (fsNum) fsNum.textContent = prefs.fs + '%';
+      applyLook();
+      savePrefs(prefs);
+    });
+
+    if (fontRadios && fontRadios.forEach) {
+      fontRadios.forEach((r) => {
+        r.addEventListener('change', () => {
+          prefs.font = r.value === 'sans' ? 'sans' : 'serif';
+          applyLook();
+          syncTypeUI();
+          savePrefs(prefs);
+        });
+      });
+    }
+
+    if (contrastBox) contrastBox.addEventListener('change', () => {
+      prefs.contrast = !!contrastBox.checked;
+      applyLook();
+      syncTypeUI();
+      savePrefs(prefs);
+      toast(prefs.contrast ? '对比度已增强' : '对比度已恢复');
+    });
+
+    syncTypeUI();
 
     const syncLookUI = () => {
       // 一律先 String() 再 toLowerCase：input.value 在个别情况下是 undefined，
@@ -4431,7 +4563,7 @@
         ${cats.map(([k, v]) => `<div class="fl-kv" data-cat="${esc(k)}" style="padding:7px 0">
           <k style="width:auto;display:flex;align-items:center;gap:8px;color:var(--fl-cat)">
             <span class="fl-ic" style="width:14px;height:14px;display:block;flex:none;opacity:.9">${iconOf(k)}</span>${esc(k)}</k>
-          <v style="text-align:right;font-variant-numeric:tabular-nums;color:rgba(var(--fl-text-rgb),.9)">${v.all}<span class="fl-catnote" style="color:var(--fl-dimmer);font-size:11px">　运营中 ${v.on} · 建设中 ${v.build}</span></v>
+          <v style="text-align:right;font-variant-numeric:tabular-nums;color:rgba(var(--fl-text-rgb),.9)">${v.all}<span class="fl-catnote" style="color:var(--fl-dimmer);font-size: calc(11px * var(--fl-fs, 1))">　运营中 ${v.on} · 建设中 ${v.build}</span></v>
         </div>`).join('')}
       </div>`);
     }
@@ -4554,19 +4686,19 @@
     let html = section('军 事', `合计 ${fmtNum(troops)} 人 · ${units.length} 编制`, `<div class="fl-box"><div class="fl-kvs">
       ${units.map((u) => `<div class="fl-kv" style="display:block;padding:10px 0">
         <div style="display:flex;align-items:baseline;gap:10px">
-          <span style="flex:1;font-size:13px;color:var(--fl-bright);letter-spacing:.5px">${esc(u.name)}</span>
+          <span style="flex:1;font-size: calc(13px * var(--fl-fs, 1));color:var(--fl-bright);letter-spacing:.5px">${esc(u.name)}</span>
           ${u.tier ? `<span class="fl-tag gold">${esc(u.tier)}</span>` : ''}
-          <span style="font-variant-numeric:tabular-nums;color:rgba(var(--fl-text-rgb),.9);font-size:13px">${u.n ? fmtNum(u.n) + ' 人' : '—'}</span>
+          <span style="font-variant-numeric:tabular-nums;color:rgba(var(--fl-text-rgb),.9);font-size: calc(13px * var(--fl-fs, 1))">${u.n ? fmtNum(u.n) + ' 人' : '—'}</span>
         </div>
         <div class="fl-space-bar" style="margin-top:8px;height:3px"><s style="width:${Math.max(3, Math.round((u.n || 0) / max * 100))}%;background:linear-gradient(90deg,rgba(126,156,201,.28),rgba(126,156,201,.72))"></s></div>
-        ${(u.fx || []).length ? `<div class="fl-fx" style="margin-top:9px;gap:5px">${u.fx.slice(0, 4).map((e) => `<div class="fl-fx-r" style="font-size:11.5px"><b style="min-width:72px;color:rgba(126,156,201,.85)">${esc(e.k)}</b><span style="color:rgba(var(--fl-text-rgb),.62)">${esc(e.v)}</span></div>`).join('')}</div>` : ''}
-        ${u.status ? `<div style="margin-top:7px;font-size:10.5px;color:var(--fl-dimmer);letter-spacing:.5px">${esc(u.status)}　·　${esc(u.from)}</div>` : ''}
+        ${(u.fx || []).length ? `<div class="fl-fx" style="margin-top:9px;gap:5px">${u.fx.slice(0, 4).map((e) => `<div class="fl-fx-r" style="font-size: calc(11.5px * var(--fl-fs, 1))"><b style="min-width:72px;color:rgba(126,156,201,.85)">${esc(e.k)}</b><span style="color:rgba(var(--fl-text-rgb),.62)">${esc(e.v)}</span></div>`).join('')}</div>` : ''}
+        ${u.status ? `<div style="margin-top:7px;font-size: calc(10.5px * var(--fl-fs, 1));color:var(--fl-dimmer);letter-spacing:.5px">${esc(u.status)}　·　${esc(u.from)}</div>` : ''}
       </div>`).join('')}
     </div></div>`);
 
     html += section('军 费', '', `<div class="fl-box"><div class="fl-kvs">
       <div class="fl-kv"><k>固定军费</k><v class="mono">${pay.length ? fmtNum(payer) + ' ' + esc(report.货币 || '') : '账本里未单列'}</v></div>
-      ${formation ? `<div class="fl-kv"><k>本级编制</k><v>${esc(formation)}<span style="color:var(--fl-dimmer);font-size:11px">　（${esc(d.tier.name)}档参考）</span></v></div>` : ''}
+      ${formation ? `<div class="fl-kv"><k>本级编制</k><v>${esc(formation)}<span style="color:var(--fl-dimmer);font-size: calc(11px * var(--fl-fs, 1))">　（${esc(d.tier.name)}档参考）</span></v></div>` : ''}
       <div class="fl-kv"><k>军费口径</k><v>村庄与乡镇的民兵、巡逻队由份地与口粮自给，不扣金库；城镇以上的职业兵团才逐月计入</v></div>
       <div class="fl-kv"><k>数据来源</k><v>${esc(units.map((u) => u.from).filter((v, i, a) => a.indexOf(v) === i).join(' / '))}</v></div>
     </div></div>`);
@@ -4594,7 +4726,7 @@
         ${info.物产.map((x) => `<div class="fl-kv">
           <k style="width:auto;min-width:88px">${esc(x.名)}</k>
           <v class="mono">${esc(x.数量)}${x.周期 ? ` / ${esc(x.周期)}` : ''}</v>
-          <v style="flex:none;text-align:right;color:var(--fl-dim);font-size:11.5px">${esc(x.状态 || '')}</v>
+          <v style="flex:none;text-align:right;color:var(--fl-dim);font-size: calc(11.5px * var(--fl-fs, 1))">${esc(x.状态 || '')}</v>
         </div>`).join('')}
       </div></div>`);
     }
@@ -4644,7 +4776,7 @@
     table += r.支出.length ? r.支出.map((x) => row(x, 'out')).join('') : '<div class="fl-led-row"><span class="n" style="color:var(--fl-dimmer)">本期无支出行</span></div>';
     table += `<div class="fl-led-row total"><span class="n">本 期 净 额</span><span class="v" style="color:${shownNet < 0 ? 'var(--fl-bad)' : 'var(--fl-ok)'}">${shownNet < 0 ? '−' : '+'}${fmtNum(Math.abs(shownNet))}</span></div>`;
     if (r.期末 != null) {
-      table += `<div class="fl-led-row total"><span class="n">期 末 金 库</span><span class="v" style="color:var(--fl-accent)">${fmtNum(r.期末)} <span style="font-size:10.5px;color:var(--fl-dimmer)">${esc(unit)}</span></span></div>`;
+      table += `<div class="fl-led-row total"><span class="n">期 末 金 库</span><span class="v" style="color:var(--fl-accent)">${fmtNum(r.期末)} <span style="font-size: calc(10.5px * var(--fl-fs, 1));color:var(--fl-dimmer)">${esc(unit)}</span></span></div>`;
     }
     table += '</div>';
 
@@ -4653,11 +4785,11 @@
     }
 
     let html = `<div class="fl-led-h">
-      <div><div class="fl-lbl">结 算 周 期</div><div style="font-size:15px;letter-spacing:1px;color:var(--fl-bright)">${esc(r.周期 || '未标注')}</div>
-        <div style="margin-top:6px;font-size:10.5px;color:var(--fl-dimmer);letter-spacing:.6px">${esc(r.领地名 || '')}${r.规模档 ? ' · ' + esc(r.规模档) : ''}${r.估值 ? ' · 估值 ' + fmtNum(r.估值) + ' ' + esc(unit) : ''}</div></div>
+      <div><div class="fl-lbl">结 算 周 期</div><div style="font-size: calc(15px * var(--fl-fs, 1));letter-spacing:1px;color:var(--fl-bright)">${esc(r.周期 || '未标注')}</div>
+        <div style="margin-top:6px;font-size: calc(10.5px * var(--fl-fs, 1));color:var(--fl-dimmer);letter-spacing:.6px">${esc(r.领地名 || '')}${r.规模档 ? ' · ' + esc(r.规模档) : ''}${r.估值 ? ' · 估值 ' + fmtNum(r.估值) + ' ' + esc(unit) : ''}</div></div>
       <div style="margin-left:auto;text-align:right"><div class="fl-lbl">本 期 净 额</div>
         <div class="fl-big ${shownNet < 0 ? 'neg' : 'pos'}">${shownNet < 0 ? '−' : '+'}${fmtNum(Math.abs(shownNet))}</div>
-        <div style="margin-top:6px;font-size:10.5px;color:var(--fl-dimmer);letter-spacing:.6px">${esc(unit)}</div></div>
+        <div style="margin-top:6px;font-size: calc(10.5px * var(--fl-fs, 1));color:var(--fl-dimmer);letter-spacing:.6px">${esc(unit)}</div></div>
     </div>`;
 
     html += table;
@@ -4684,7 +4816,7 @@
     if (r.待决) {
       html += `<div class="fl-verdict" style="border-left-color:rgba(220,190,106,.45);background:rgba(220,190,106,.05);margin-top:12px">
         <b style="color:var(--fl-warn)">待 决</b>
-        ${esc(r.待决.事)}${r.待决.代价 ? `<br><span style="color:var(--fl-dim);font-size:11.5px">${esc(r.待决.代价)}</span>` : ''}
+        ${esc(r.待决.事)}${r.待决.代价 ? `<br><span style="color:var(--fl-dim);font-size: calc(11.5px * var(--fl-fs, 1))">${esc(r.待决.代价)}</span>` : ''}
         ${(r.待决.选项 || []).length ? `<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">${r.待决.选项.map((o) => `<span class="fl-chip">${esc(o)}</span>`).join('')}</div>` : ''}
       </div>`;
     }
@@ -5682,7 +5814,7 @@
     html += row('档位表对数', ta.matched
       ? yes('最近上下文里出现 ' + ta.matched + '/7 个档名' + (ta.inOrder ? '，顺序一致' : '，顺序对不上'))
       : warn('上下文里一个档名都没出现，无法核对'));
-    html += row('脚本档位槽位', '<code>' + ta.slots.join(' / ') + '</code>　<span style="color:var(--fl-dimmer);font-size:11px">应对上世界书 6/10/18/30/45/60+/90+</span>');
+    html += row('脚本档位槽位', '<code>' + ta.slots.join(' / ') + '</code>　<span style="color:var(--fl-dimmer);font-size: calc(11px * var(--fl-fs, 1))">应对上世界书 6/10/18/30/45/60+/90+</span>');
 
     html += '<div class="fl-diag-h">建 筑 档 案 库</div>';
     html += row('存储位置', '<code>' + esc(STORE_KEY) + '</code>' + (vars && vars[STORE_KEY] ? yes('　已写进聊天变量') : warn('　仅本机缓存')));

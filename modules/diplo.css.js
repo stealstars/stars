@@ -28,7 +28,7 @@
 }
 
 .fl-ov-h b {
-  font-size: 14px;
+  font-size: calc(14px * var(--fl-fs, 1));
   font-weight: 600;
   letter-spacing: .5px;
   color: var(--fl-accent);
@@ -36,7 +36,7 @@
 
 .fl-ov-h em {
   font-style: normal;
-  font-size: 10px;
+  font-size: calc(10px * var(--fl-fs, 1));
   letter-spacing: 1px;
   color: var(--fl-dimmer);
 }
@@ -45,13 +45,13 @@
   display: flex;
   gap: 10px;
   padding: 3px 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--fl-fs, 1));
   line-height: 1.75;
 }
 
 .fl-ov-row k {
   flex: 0 0 62px;
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--fl-fs, 1));
   letter-spacing: 1px;
   color: var(--fl-dimmer);
   white-space: nowrap;
@@ -116,25 +116,25 @@
   border: 1px dashed var(--fl-line2);
   border-radius: 10px;
   padding: 14px 14px 13px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--fl-fs, 1));
   color: var(--fl-dim);
   line-height: 1.7;
 }
 .fl-dw-empty small {
   display: block;
   margin-top: 5px;
-  font-size: 11px;
+  font-size: calc(11px * var(--fl-fs, 1));
   opacity: .8;
 }
 .fl-dw-empty code {
-  font-size: 11px;
+  font-size: calc(11px * var(--fl-fs, 1));
   padding: 1px 4px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.07);
 }
 
 .fl-dw-nm {
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--fl-fs, 1));
   font-weight: 600;
   letter-spacing: .04em;
   color: var(--fl-ink);
@@ -143,7 +143,7 @@
 }
 
 .fl-dw-sub {
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--fl-fs, 1));
   letter-spacing: .04em;
   color: var(--fl-dim);
   line-height: 1.5;
@@ -157,14 +157,14 @@
   margin-top: 7px;
   padding-top: 6px;
   border-top: 1px dashed rgba(212, 175, 90, .16);
-  font-size: 10px;
+  font-size: calc(10px * var(--fl-fs, 1));
   letter-spacing: .08em;
   color: rgba(212, 175, 90, .74);
 }
 
 /* 主体那一个数字（公国数 / 城数）放大一点，一眼能看出体量 */
 .fl-dw-cnt b {
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--fl-fs, 1));
   font-weight: 600;
   letter-spacing: .06em;
   color: var(--fl-accent);
@@ -212,14 +212,14 @@
 }
 
 .fl-dp-br {
-  font-size: 11px;
+  font-size: calc(11px * var(--fl-fs, 1));
   opacity: .35;
   flex: 0 0 auto;
   line-height: 1.5;
 }
 
 .fl-dp-sub .fl-dp-nm {
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--fl-fs, 1));
   opacity: .92;
 }
 
@@ -253,20 +253,20 @@
 }
 
 .fl-dp-duchy .fl-dp-nm {
-  font-size: 13px;
+  font-size: calc(13px * var(--fl-fs, 1));
   font-weight: 600;
   letter-spacing: .3px;
 }
 
 .fl-dp-nm {
-  font-size: 13px;
+  font-size: calc(13px * var(--fl-fs, 1));
   color: var(--fl-ink);
   line-height: 1.4;
   flex: 0 0 auto;
 }
 
 .fl-dp-tag {
-  font-size: 10px;
+  font-size: calc(10px * var(--fl-fs, 1));
   letter-spacing: .05em;
   color: rgba(212, 175, 90, .72);
   border: 1px solid rgba(212, 175, 90, .24);
@@ -276,7 +276,7 @@
 }
 
 .fl-dp-wh {
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--fl-fs, 1));
   color: var(--fl-dim);
   flex: 1 1 auto;
   min-width: 0;
@@ -288,7 +288,7 @@
 
 .fl-dp-more {
   padding: 9px 11px;
-  font-size: 11px;
+  font-size: calc(11px * var(--fl-fs, 1));
   letter-spacing: .06em;
   color: rgba(212, 175, 90, .8);
   cursor: pointer;
@@ -327,7 +327,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 17px;
+  font-size: calc(17px * var(--fl-fs, 1));
   font-weight: 600;
   color: #2a2114;
   background: linear-gradient(160deg, #e0c47c, #b8933f);
@@ -338,7 +338,7 @@
 .fl-pf-tt { flex: 1 1 auto; min-width: 0; }
 
 .fl-pf-nm {
-  font-size: 16px;
+  font-size: calc(16px * var(--fl-fs, 1));
   font-weight: 600;
   letter-spacing: .05em;
   color: var(--fl-ink);
@@ -353,7 +353,7 @@
 }
 
 .fl-pf-chip {
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--fl-fs, 1));
   letter-spacing: .04em;
   color: var(--fl-dim);
   border: 1px solid var(--fl-line);
@@ -384,20 +384,20 @@
 }
 
 .fl-pf-mk {
-  font-size: 10px;
+  font-size: calc(10px * var(--fl-fs, 1));
   letter-spacing: .12em;
   color: var(--fl-dim);
   margin-bottom: 3px;
 }
 
 .fl-pf-mv {
-  font-size: 14.5px;
+  font-size: calc(14.5px * var(--fl-fs, 1));
   color: var(--fl-ink);
   line-height: 1.25;
 }
 
 .fl-pf-mv small {
-  font-size: 10px;
+  font-size: calc(10px * var(--fl-fs, 1));
   color: var(--fl-dim);
   margin-left: 2px;
 }
@@ -409,7 +409,7 @@
 }
 
 .fl-pf-sk {
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--fl-fs, 1));
   letter-spacing: .14em;
   color: rgba(212, 175, 90, .84);
   margin-bottom: 6px;
@@ -419,14 +419,14 @@
   display: flex;
   gap: 10px;
   padding: 3.5px 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--fl-fs, 1));
   line-height: 1.66;
 }
 
 .fl-pf-kv .k {
   flex: 0 0 62px;
   color: var(--fl-dim);
-  font-size: 11px;
+  font-size: calc(11px * var(--fl-fs, 1));
   letter-spacing: .04em;
 }
 
@@ -441,7 +441,7 @@
   padding: 10px 11px;
   border: 1px dashed rgba(212, 175, 90, .2);
   border-radius: 7px;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--fl-fs, 1));
   line-height: 1.82;
   color: var(--fl-dim);
   white-space: pre-wrap;
@@ -460,7 +460,7 @@
 .fl-pf-btn {
   flex: 0 0 auto;
   padding: 6px 13px;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--fl-fs, 1));
   letter-spacing: .06em;
   color: rgba(212, 175, 90, .92);
   border: 1px solid rgba(212, 175, 90, .34);
@@ -489,13 +489,13 @@
 
 .fl-pf-note {
   margin-top: 9px;
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--fl-fs, 1));
   line-height: 1.7;
   color: var(--fl-dim);
 }
 
 .fl-pf-note code {
-  font-size: 10px;
+  font-size: calc(10px * var(--fl-fs, 1));
   color: rgba(212, 175, 90, .8);
   background: rgba(212, 175, 90, .08);
   padding: 1px 4px;
@@ -506,14 +506,14 @@
 .fl-dw-load {
   padding: 22px 12px;
   text-align: center;
-  font-size: 12px;
+  font-size: calc(12px * var(--fl-fs, 1));
   letter-spacing: .06em;
   color: var(--fl-dim);
 }
 
 .fl-dw-load b {
   display: block;
-  font-size: 15px;
+  font-size: calc(15px * var(--fl-fs, 1));
   letter-spacing: .12em;
   color: rgba(212, 175, 90, .8);
   margin-bottom: 7px;
@@ -540,10 +540,10 @@
     gap: 8px;
   }
   .fl-dw-card { padding: 10px 11px 9px; }
-  .fl-dw-nm { font-size: 12.5px; }
+  .fl-dw-nm { font-size: calc(12.5px * var(--fl-fs, 1)); }
   .fl-pf-metrics { grid-template-columns: repeat(3, 1fr); }
   .fl-pf { padding: 12px 12px 11px; }
-  .fl-pf-nm { font-size: 15px; }
+  .fl-pf-nm { font-size: calc(15px * var(--fl-fs, 1)); }
   .fl-pf-kv .k { flex: 0 0 54px; }
   .fl-dp-wh { display: none; }
 }
