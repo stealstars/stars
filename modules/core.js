@@ -4522,7 +4522,17 @@
     if (k !== '领地') selected = null;
     try { screen.scrollTop = 0; } catch (e) { /* 忽略 */ }
     if (viewEl) viewEl.scrollTop = 0;
-    render();
+    /* 切页只要换视图和高亮导航。顶栏、头图、指标跟页签无关，
+       每次重画一遍就是白白重排一次，国策页尤其明显。 */
+    try {
+      const d = currentDomain();
+      applyPage();
+      renderNav();
+      renderView(d);
+      renderFoot();
+    } catch (e) {
+      render();   // 万一哪块没准备好，退回全量渲染
+    }
   }
 
   function renderNav() {

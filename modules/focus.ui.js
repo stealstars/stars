@@ -46,6 +46,7 @@
   let genBusy = false;
   let genErr = '';
   let ctx = {};                  // 领地实况，生成树时用
+  let lastHtml = '';             // 上次渲染的 HTML，一样就不重建 DOM
 
   /* ------------------------------------------------------------ 存取 */
   function storeKey() { return LS_PREFIX + (chatId || 'default'); }
@@ -730,7 +731,8 @@
 
   function repaint(rootEl) {
     if (!rootEl) return;
-    rootEl.innerHTML = html();
+    lastHtml = html();
+    rootEl.innerHTML = lastHtml;
     bind(rootEl);
   }
 
@@ -782,8 +784,13 @@
     render(container) {
       if (!container) return;
       lastRoot = container;
-      container.innerHTML = html();
-      bind(container);
+      const h = html();
+      /* 内容一模一样就别重建：切回这一页时白刷一遍 DOM，节点越多越卡 */
+      if (h !== lastHtml || !container.querySelector('.fx')) {
+        lastHtml = h;
+        container.innerHTML = h;
+        bind(container);
+      }
       flushPolish();
     },
     _test: {

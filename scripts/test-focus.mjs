@@ -388,5 +388,25 @@ const before = JSON.stringify(T.news());
 UI.render({ innerHTML: '', querySelector: () => null, querySelectorAll: () => [] });
 ok('没配 AI 时不动润色标记', JSON.stringify(T.news()) === before, '变了');
 
+/* ---------- 14. 渲染缓存 ---------- */
+console.log('\n=== 14. 渲染缓存 ===');
+T.setNews([]);
+T.setCountry('奥古斯提姆帝国');
+T.setDone([]);
+T.setSel(null);
+let writes = 0;
+const cacheEl = {
+  _h: '',
+  get innerHTML() { return this._h; },
+  set innerHTML(v) { writes += 1; this._h = v; },
+  querySelector: () => ({ classList: { add() {}, toggle() {} }, addEventListener() {} }),
+  querySelectorAll: () => [],
+};
+UI.render(cacheEl);
+const w1 = writes;
+UI.render(cacheEl);
+ok('内容没变时不重建 DOM', writes === w1, '多写了 ' + (writes - w1) + ' 次');
+ok('html() 幂等', T.html() === T.html());
+
 console.log('\n' + (fail ? fail + ' 项失败  ' : '全部通过 ✔  ') + (pass + fail) + ' 项');
 process.exit(fail ? 1 : 0);

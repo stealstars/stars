@@ -55,6 +55,7 @@
   let focusChatId = '';     // 国策进度按聊天隔离
   let focusMounted = false;
   let focusGoSettings = null;   // 国策生成要配 API，缺了要能跳过去
+  let lastHtml = '';            // 上次渲染的 HTML，一样就不重建 DOM
 
   const AI = () => window.__fiefAI || null;
   const PR = () => window.__fiefPolicyAI || null;
@@ -773,12 +774,17 @@
     setContext(o) { ctx = Object.assign({}, ctx, o || {}); },
     render(container) {
       if (!container) return;
-      container.innerHTML = html();
-      bind(container);
+      const next = html();
+      /* 内容没变就别重建：政令卡带 3D 变换，白刷一遍就是一次重排 */
+      if (next !== lastHtml || !container.querySelector('#fx-host')) {
+        lastHtml = next;
+        container.innerHTML = next;
+        bind(container);
+        const ph = container.querySelector('.fl-phand');
+        if (ph) ph.classList.add('dealing');
+      }
       const fx = container.querySelector('#fx-host');
       if (fx) mountFocus(fx);
-      const h = container.querySelector('.fl-phand');
-      if (h) h.classList.add('dealing');
     },
     command: buildCommand,
     chosen: () => chosen.slice(),
