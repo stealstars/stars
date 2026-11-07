@@ -201,8 +201,10 @@
       pos: p.pos && typeof p.pos === 'object' ? p.pos : null,
       // 外观三件：字号百分比、字体族、对比度
       fs: (() => { const n = Number(p.fs); return Number.isFinite(n) ? Math.max(85, Math.min(135, n)) : 100; })(),
-      font: p.font === 'sans' ? 'sans' : 'serif',
+      font: ['serif', 'hei', 'sans', 'sys'].indexOf(p.font) >= 0 ? p.font : 'serif',
       contrast: !!p.contrast,
+      // 明暗：底色深浅，和主色无关
+      mode: p.mode === 'light' ? 'light' : 'dark',
     };
   }
 
@@ -280,11 +282,34 @@
    * 现在放到 0.80 一档：底色能明显看出是琥珀、青玉还是朱砂，
    * 但仍在暗色区间，白字对比度够。
    */
-  function paletteOf(accentHex) {
+  function paletteOf(accentHex, light) {
     const accent = normHex(accentHex) || DEFAULT_ACCENT;
+    const rgb = hexToRgb(accent).join(',');
+
+    /* 浅色：底色往米白混，文字转深，悬浮星反过来做亮球 */
+    if (light) {
+      return {
+        accent,
+        rgb,
+        bg: mixHex(accent, '#fdfbf6', 0.94),
+        bg2: mixHex(accent, '#f6f1e6', 0.90),
+        surface: mixHex(accent, '#ffffff', 0.90),
+        surface2: mixHex(accent, '#f3ede1', 0.86),
+        text: mixHex('#2c2519', accent, 0.10),
+        bright: mixHex('#14100a', accent, 0.08),
+        star1: mixHex(accent, '#ffffff', 0.42),
+        star2: accent,
+        star3: mixHex(accent, '#000000', 0.34),
+        star4: mixHex(accent, '#000000', 0.55),
+        crest1: mixHex(accent, '#ffffff', 0.34),
+        crest2: accent,
+        crest3: mixHex(accent, '#000000', 0.30),
+      };
+    }
+
     return {
       accent,
-      rgb: hexToRgb(accent).join(','),
+      rgb,
       bg: mixHex(accent, '#0a0806', 0.80),
       bg2: mixHex(accent, '#0d0b08', 0.76),
       surface: mixHex(accent, '#120f0b', 0.70),
@@ -301,22 +326,27 @@
     };
   }
 
-  /** 字号 / 字体 / 对比度：一个 CSS 变量加两个类名，全挂在 root 上 */
+  /** 字号 / 字体 / 对比度 / 明暗：一个 CSS 变量加几个类名，全挂在 root 上 */
   function applyLook() {
     if (!root) return;
     const fs = Math.max(85, Math.min(135, Number(prefs && prefs.fs) || 100));
     try { root.style.setProperty('--fl-fs', String(fs / 100)); } catch (e) { /* 忽略 */ }
     root.classList.toggle('fl-contrast', !!(prefs && prefs.contrast));
-    root.classList.toggle('fl-sans', !!(prefs && prefs.font === 'sans'));
+    const font = (prefs && prefs.font) || 'serif';
+    ['serif', 'hei', 'sans', 'sys'].forEach((k) => {
+      root.classList.toggle('fl-font-' + k, font === k);
+    });
+    root.classList.toggle('fl-light', !!(prefs && prefs.mode === 'light'));
   }
 
   /** 把整套配色写进 root 的内联变量；样式表被改写也不影响 */
   function applyAccent(accentHex) {
-    const p = paletteOf(accentHex);
+    const light = !!(prefs && prefs.mode === 'light');
+    const p = paletteOf(accentHex, light);
     // 字色：手动定过就用它，标题白按它提亮；没定就吃主色推出来的那一档
     const ink = prefs ? normHex(prefs.text) : null;
     const text = ink || p.text;
-    const bright = ink ? mixHex(ink, '#ffffff', 0.32) : p.bright;
+    const bright = ink ? mixHex(ink, light ? '#000000' : '#ffffff', light ? 0.34 : 0.32) : p.bright;
     p.text = text;
     p.bright = bright;
     if (!root) return p;
@@ -327,6 +357,12 @@
     set('--fl-bg2', p.bg2);
     set('--fl-surface', p.surface);
     set('--fl-surface2', p.surface2);
+    /* 描边：浅底上 0.13 太淡，得提到 0.26 才看得出边界；对比度再各提一档 */
+    const contrast = !!(prefs && prefs.contrast);
+    set('--fl-line', 'rgba(' + p.rgb + ','
+      + (light ? (contrast ? 0.34 : 0.26) : (contrast ? 0.20 : 0.13)) + ')');
+    set('--fl-line2', 'rgba(' + p.rgb + ','
+      + (light ? (contrast ? 0.56 : 0.46) : (contrast ? 0.38 : 0.26)) + ')');
     set('--fl-text', text);
     set('--fl-text-rgb', hexToRgb(text).join(','));
     set('--fl-bright', bright);
@@ -1999,10 +2035,39 @@
     --fl-line: rgba(var(--fl-accent-rgb), 0.20);
     --fl-line2: rgba(var(--fl-accent-rgb), 0.38);
   }
-  /* 无衬线：有些人不喜欢宋体在暗底上的细笔画 */
-  #fief-ledger-root.fl-sans {
-    --fl-serif: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans SC", system-ui, sans-serif;
+  /* 字体四档：宋体 / 黑体 / 无衬线 / 跟随系统 */
+  #fief-ledger-root.fl-font-serif {
+    --fl-serif: "Noto Serif SC", "Songti SC", "Source Han Serif SC", "STSong", serif;
   }
+  #fief-ledger-root.fl-font-hei {
+    --fl-serif: "SimHei", "Heiti SC", "STHeiti", "Microsoft YaHei", sans-serif;
+  }
+  #fief-ledger-root.fl-font-sans {
+    --fl-serif: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans SC", sans-serif;
+  }
+  #fief-ledger-root.fl-font-sys {
+    --fl-serif: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  }
+  /* 浅色：纯黑阴影在亮底上会脏，换成淡影 */
+  #fief-ledger-root.fl-light #fief-ledger-star {
+    box-shadow:
+      0 10px 26px rgba(0,0,0,0.20), 0 2px 6px rgba(0,0,0,0.12),
+      inset 0 1px 0 rgba(255,255,255,0.85), inset 0 -3px 8px rgba(0,0,0,0.10),
+      0 0 0 1px rgba(var(--fl-accent-rgb),0.45), 0 0 18px rgba(var(--fl-accent-rgb),0.16);
+  }
+  #fief-ledger-root.fl-light #fief-ledger-star:hover {
+    box-shadow:
+      0 14px 32px rgba(0,0,0,0.26), 0 2px 6px rgba(0,0,0,0.12),
+      inset 0 1px 0 rgba(255,255,255,0.95), inset 0 -3px 8px rgba(0,0,0,0.10),
+      0 0 0 1px var(--fl-accent), 0 0 26px rgba(var(--fl-accent-rgb),0.40);
+  }
+  /* 浅色：原本靠「白上叠白」做出来的层次和悬停字色，在米白底上要反过来 */
+  #fief-ledger-root.fl-light .fl-btn.ghost:hover,
+  #fief-ledger-root.fl-light .fl-close2:hover,
+  #fief-ledger-root.fl-light .fl-dr-x:hover { color: #14100a; }
+  #fief-ledger-root.fl-light .fl-metric .fl-meter,
+  #fief-ledger-root.fl-light .fl-pips s,
+  #fief-ledger-root.fl-light .fl-space-bar { background: rgba(0,0,0,0.10); }
 
   /* ================= 悬浮星 ================= */
   #fief-ledger-star {
@@ -3499,18 +3564,40 @@
               <div class="fl-sec-note">正文、标签、数字一起放大缩小。觉得字小就往右拉。</div>
             </div>
             <div class="fl-sec">
+              <div class="fl-sec-h">明 暗<em>Mode</em><span></span></div>
+              <div class="fl-grid">
+                <label class="fl-opt" id="fl-opt-dark">
+                  <input type="radio" name="fl-mode" value="dark">
+                  <u>深色</u>
+                </label>
+                <label class="fl-opt" id="fl-opt-light">
+                  <input type="radio" name="fl-mode" value="light">
+                  <u>浅色</u>
+                </label>
+              </div>
+              <div class="fl-sec-note">浅色是把底色翻成米白，主色、字色、描边一起重算，不是蒙一层白。</div>
+            </div>
+            <div class="fl-sec">
               <div class="fl-sec-h">字 体<em>Typeface</em><span></span></div>
               <div class="fl-grid">
                 <label class="fl-opt" id="fl-opt-serif">
                   <input type="radio" name="fl-font" value="serif">
                   <u>宋体</u>
                 </label>
+                <label class="fl-opt" id="fl-opt-hei">
+                  <input type="radio" name="fl-font" value="hei">
+                  <u>黑体</u>
+                </label>
                 <label class="fl-opt" id="fl-opt-sans">
                   <input type="radio" name="fl-font" value="sans">
                   <u>无衬线</u>
                 </label>
+                <label class="fl-opt" id="fl-opt-sys">
+                  <input type="radio" name="fl-font" value="sys">
+                  <u>跟随系统</u>
+                </label>
               </div>
-              <div class="fl-sec-note">宋体在暗底上笔画细，看着累就换无衬线。</div>
+              <div class="fl-sec-note">宋体最像册子，黑体最清楚；跟随系统就是这台设备默认的那个。</div>
             </div>
             <div class="fl-sec">
               <div class="fl-sec-h">对 比 度<em>Contrast</em><span></span></div>
@@ -3698,10 +3785,18 @@
       if (fontRadios && fontRadios.forEach) {
         fontRadios.forEach((r) => { r.checked = (r.value === prefs.font); });
       }
-      const oSerif = screen.querySelector('#fl-opt-serif');
-      const oSans = screen.querySelector('#fl-opt-sans');
-      if (oSerif) oSerif.classList.toggle('on', prefs.font !== 'sans');
-      if (oSans) oSans.classList.toggle('on', prefs.font === 'sans');
+      ['serif', 'hei', 'sans', 'sys'].forEach((k) => {
+        const o = screen.querySelector('#fl-opt-' + k);
+        if (o) o.classList.toggle('on', prefs.font === k);
+      });
+      const modeRadios = screen.querySelectorAll('input[name="fl-mode"]');
+      if (modeRadios && modeRadios.forEach) {
+        modeRadios.forEach((r) => { r.checked = (r.value === prefs.mode); });
+      }
+      ['dark', 'light'].forEach((k) => {
+        const o = screen.querySelector('#fl-opt-' + k);
+        if (o) o.classList.toggle('on', prefs.mode === k);
+      });
       if (contrastBox) contrastBox.checked = !!prefs.contrast;
       const oCon = screen.querySelector('#fl-opt-contrast');
       if (oCon) oCon.classList.toggle('on', !!prefs.contrast);
@@ -3717,7 +3812,7 @@
     if (fontRadios && fontRadios.forEach) {
       fontRadios.forEach((r) => {
         r.addEventListener('change', () => {
-          prefs.font = r.value === 'sans' ? 'sans' : 'serif';
+          prefs.font = ['serif', 'hei', 'sans', 'sys'].indexOf(r.value) >= 0 ? r.value : 'serif';
           applyLook();
           syncTypeUI();
           savePrefs(prefs);
@@ -3725,8 +3820,23 @@
       });
     }
 
+    const modeRadios = screen.querySelectorAll('input[name="fl-mode"]');
+    if (modeRadios && modeRadios.forEach) {
+      modeRadios.forEach((r) => {
+        r.addEventListener('change', () => {
+          prefs.mode = r.value === 'light' ? 'light' : 'dark';
+          applyAccent(prefs.accent);   // 明暗会重算整套底色和字色
+          applyLook();
+          syncTypeUI();
+          savePrefs(prefs);
+          toast(prefs.mode === 'light' ? '已切浅色' : '已切深色');
+        });
+      });
+    }
+
     if (contrastBox) contrastBox.addEventListener('change', () => {
       prefs.contrast = !!contrastBox.checked;
+      applyAccent(prefs.accent);   // 描边档位也在这里算
       applyLook();
       syncTypeUI();
       savePrefs(prefs);
