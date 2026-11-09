@@ -348,11 +348,77 @@
         mp: Number(((hero.法力值 || {}).上限 || {})._基础) || 0,
         sp: Number(((hero.体力值 || {}).上限 || {})._基础) || 0,
       },
+      ladder: ladderOf(hero.登神长阶),
+    };
+  }
+
+  /** 登神长阶拆成好填的几块 */
+  function ladderOf(raw) {
+    const d = (raw && typeof raw === 'object') ? raw : {};
+    const realm = (d.神国 && typeof d.神国 === 'object') ? d.神国 : {};
+    return {
+      on: !!d.是否开启,
+      elements: d.要素 || {},
+      powers: d.权能 || {},
+      laws: d.法则 || {},
+      seat: String(d.神位 || ''),
+      realmName: String(realm.名称 || ''),
+      realmDesc: String(realm.描述 || ''),
+    };
+  }
+
+  /** 「名称」或「名称|效果」一行一项，最多 max 个 */
+  function parseLadder(text, max) {
+    const out = {};
+    const lines = String(text || '').split('\n');
+    for (const line of lines) {
+      const s = line.trim();
+      if (!s) continue;
+      const at = s.indexOf('|');
+      const name = (at < 0 ? s : s.slice(0, at)).trim();
+      const eff = at < 0 ? '' : s.slice(at + 1).trim();
+      if (!name) continue;
+      out[name] = eff ? { 效果: eff } : {};
+      if (Object.keys(out).length >= max) break;
+    }
+    return out;
+  }
+
+  /** 反过来：存档 → 一行一项的文本，填回输入框 */
+  function ladderText(obj) {
+    return Object.entries(obj || {})
+      .map(([k, v]) => (v && v.效果 ? k + '|' + v.效果 : k))
+      .join('\n');
+  }
+
+  /**
+   * 登神长阶是阶梯：要素 → 权能 → 法则。
+   * 脚本的规则是「有法则就清空要素和权能，有权能就清空要素」，
+   * 这里照抄，免得写进去又被裁掉、界面和存档对不上。
+   */
+  function ladderPatch(el, pw, lw, seat, realmName, realmDesc) {
+    const n = realmName ? 99 : (seat ? 2 : 1);
+    const laws = parseLadder(lw, n);
+    const hasLaw = Object.keys(laws).length > 0;
+    const powers = hasLaw ? {} : parseLadder(pw, 1);
+    const hasPower = Object.keys(powers).length > 0;
+    const elements = (hasLaw || hasPower) ? {} : parseLadder(el, 3);
+    const hasEl = Object.keys(elements).length > 0;
+    const s = String(seat || '').trim();
+    const rn = String(realmName || '').trim();
+    return {
+      是否开启: !!(hasEl || hasPower || hasLaw || s || rn),
+      要素: elements,
+      权能: powers,
+      法则: laws,
+      神位: s,
+      神国: { 名称: rn, 描述: String(realmDesc || '').trim() },
     };
   }
 
   /** 把补丁写回那条消息的 stat_data */
-  function writeHeroStat(idx, patch) {    const msgs = getMessages();
+  function writeHeroStat(idx, patch) {
+    const msgs = getMessages();
     const m = msgs[idx];
     if (!m || !patch) return false;
 
@@ -388,6 +454,24 @@
     } catch (e) { return false; }
   }
 
+  /** 展开前的警告。用自绘的，不用原生弹窗——
+      酒馆的 iframe 有时会拦掉原生弹窗，拦掉就等于用户点了取消，面板永远打不开。 */
+  function renderDevWarn(box, onOk) {
+    if (!box) return;
+    box.innerHTML = `
+      <div class="fl-dev-warn">
+        <p>星月的属性修改器外挂，纯纯的外挂，谨慎使用，后果自负喵</p>
+        <div class="fl-dr-act">
+          <button class="fl-btn" type="button" id="fl-dev-agree">知道了</button>
+          <button class="fl-btn ghost" type="button" id="fl-dev-cancel">算了</button>
+        </div>
+      </div>`;
+    const agree = box.querySelector('#fl-dev-agree');
+    const cancel = box.querySelector('#fl-dev-cancel');
+    if (agree) agree.addEventListener('click', () => onOk && onOk());
+    if (cancel) cancel.addEventListener('click', () => { box.innerHTML = ''; });
+  }
+
   /** 「关于 → 调试」里那块：等级 + 五维，写完顺手把上限按公式重算 */
   function renderDev(box) {
     if (!box) return;
@@ -402,6 +486,7 @@
 
     const t = tierOfLevel(h.level);
     const cap = capsOf(h.attr, h.level);
+    const L = h.ladder || {};
     box.innerHTML = `
       <div class="fl-fix">
         <label class="fl-fix-r"><k>等级</k>
@@ -414,6 +499,21 @@
           <input id="fl-dev-exp" type="number" min="0" value="${h.exp}"></label>
         <label class="fl-fix-r"><k>升级所需</k>
           <input id="fl-dev-need" type="number" min="0" value="${h.need}"></label>
+      </div>
+      <div class="fl-hint">登神长阶　12 级要要素，16 级要权能，20 级要法则，24 级要法则 + 神位</div>
+      <div class="fl-fix">
+        <label class="fl-fix-r"><k>要素</k>
+          <textarea id="fl-dev-el" rows="2" placeholder="一行一个，最多 3 个；也可以写 名称|效果">${esc(ladderText(L.elements))}</textarea></label>
+        <label class="fl-fix-r"><k>权能</k>
+          <textarea id="fl-dev-pw" rows="1" placeholder="最多 1 个">${esc(ladderText(L.powers))}</textarea></label>
+        <label class="fl-fix-r"><k>法则</k>
+          <textarea id="fl-dev-lw" rows="1" placeholder="默认 1 条；有神位 2 条；有神国不限">${esc(ladderText(L.laws))}</textarea></label>
+        <label class="fl-fix-r"><k>神位</k>
+          <input id="fl-dev-seat" type="text" value="${esc(L.seat)}" placeholder="如 战争之神"></label>
+        <label class="fl-fix-r"><k>神国</k>
+          <input id="fl-dev-realm" type="text" value="${esc(L.realmName)}" placeholder="名称，留空表示还没开辟"></label>
+        <label class="fl-fix-r"><k>描述</k>
+          <input id="fl-dev-realmd" type="text" value="${esc(L.realmDesc)}" placeholder="神国描述"></label>
       </div>
       <div class="fl-hint">现在：${esc(h.tier || '未标注')}　上限 HP ${h.caps.hp} / MP ${h.caps.mp} / SP ${h.caps.sp}</div>
       <div class="fl-hint">按公式重算：${esc(t.name)}　HP ${cap.hp} / MP ${cap.mp} / SP ${cap.sp}</div>
@@ -448,6 +548,15 @@
         ? 'MAX'
         : Math.max(0, Math.round(Number(needRaw) || 0));
 
+      const txt = (id) => {
+        const el = box.querySelector(id);
+        return el ? el.value : '';
+      };
+      const ladder = ladderPatch(
+        txt('#fl-dev-el'), txt('#fl-dev-pw'), txt('#fl-dev-lw'),
+        txt('#fl-dev-seat'), txt('#fl-dev-realm'), txt('#fl-dev-realmd'),
+      );
+
       const ok = writeHeroStat(cur.idx, {
         主角: {
           等级: lv,
@@ -455,6 +564,7 @@
           属性点: point,
           累计经验值: exp,
           升级所需经验: need,
+          登神长阶: ladder,
           属性: attr,
           生命值: { 上限: { _基础: c.hp } },
           法力值: { 上限: { _基础: c.mp } },
@@ -3223,10 +3333,44 @@
   }
   .fl-fix-r input:focus, .fl-fix-r select:focus { border-color: var(--fl-accent); }
   .fl-fix-r input::placeholder { color: rgba(var(--fl-text-rgb), 0.2); }
+  /* 登神长阶那几栏是多行的，撑满剩下的宽度 */
+  .fl-fix-r textarea {
+    flex: 1 1 auto; min-width: 0;
+    font-family: inherit;
+    font-size: calc(12px * var(--fl-fs, 1));
+    line-height: 1.6;
+    color: var(--fl-text);
+    background: var(--fl-bg2);
+    border: 1px solid var(--fl-line2);
+    border-radius: 2px;
+    padding: 6px 9px;
+    outline: none;
+    resize: vertical;
+    -webkit-appearance: none;
+  }
+  .fl-fix-r textarea:focus { border-color: var(--fl-accent); }
+  .fl-fix-r textarea::placeholder { color: rgba(var(--fl-text-rgb), 0.2); }
+  .fl-fix-r:has(textarea) { align-items: flex-start; }
+  .fl-fix-r:has(textarea) k { padding-top: 7px; }
 
   /* 调试入口：就两个字，灰的，点开才有东西 */
   .fl-dev-link { cursor: pointer; user-select: none; letter-spacing: 1px; }
   .fl-dev-link:hover { color: var(--fl-dim); }
+
+  .fl-dev-warn {
+    margin-top: 10px;
+    padding: 12px 14px;
+    border: 1px solid rgba(207, 106, 85, 0.35);
+    border-radius: 3px;
+    background: rgba(207, 106, 85, 0.07);
+  }
+  .fl-dev-warn p {
+    margin: 0 0 10px;
+    font-size: calc(12px * var(--fl-fs, 1));
+    line-height: 1.8;
+    color: var(--fl-text);
+  }
+  .fl-dev-warn .fl-dr-act { margin-top: 0; }
   .fl-hint { font-size: calc(10px * var(--fl-fs, 1)); color: rgba(var(--fl-text-rgb),0.24); margin-top: 6px; letter-spacing: .4px; }
 
   /* ---- 底栏 ---- */
@@ -4270,8 +4414,8 @@
     const devBody = screen.querySelector('#fl-dev-body');
     if (devLink && devBody) {
       devLink.addEventListener('click', () => {
-        devOpen = !devOpen;
-        renderDev(devBody);
+        if (devOpen) { devOpen = false; renderDev(devBody); return; }
+        renderDevWarn(devBody, () => { devOpen = true; renderDev(devBody); });
       });
     }
 
