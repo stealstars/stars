@@ -218,6 +218,7 @@
    */
   const FIX_KEY = 'fief-ledger-fixes-v1';
   let fixes = {};
+  let devOpen = false;   // 「关于 → 调试」展开了没
 
   function loadFixes() {
     try {
@@ -251,6 +252,177 @@
         it.fixed = true;
       }
     }
+  }
+
+  /* -------------------------------------------------------- 属性（等级 / 五维） */
+  /* 等级 → 层级 / 乘数，抄自「核心数值表」：
+     一层 Lv.1-4 · 二层 Lv.5-8 · 三层 Lv.9-12 · 四层 Lv.13-16
+     五层 Lv.17-20 · 六层 Lv.21-24 · 七层 Lv.25
+     HP 乘数 1/2/4/10/20/40/100，MP·SP 乘数 1/2.5/6/15/35/80/160 */
+  const LEVEL_TIERS = [
+    { max: 4, name: '第一层级/普通', hp: 1, mp: 1 },
+    { max: 8, name: '第二层级/优良', hp: 2, mp: 2.5 },
+    { max: 12, name: '第三层级/稀有', hp: 4, mp: 6 },
+    { max: 16, name: '第四层级/史诗', hp: 10, mp: 15 },
+    { max: 20, name: '第五层级/传说', hp: 20, mp: 35 },
+    { max: 24, name: '第六层级/神话', hp: 40, mp: 80 },
+    { max: 25, name: '第七层级/半神', hp: 100, mp: 160 },
+  ];
+  const FIVE_ATTR = ['力量', '敏捷', '体质', '智力', '精神'];
+
+  function clampLevel(v) {
+    const n = Math.round(Number(v));
+    return Number.isFinite(n) ? Math.max(1, Math.min(25, n)) : 1;
+  }
+
+  function tierOfLevel(lv) {
+    const n = clampLevel(lv);
+    for (const t of LEVEL_TIERS) if (n <= t.max) return t;
+    return LEVEL_TIERS[LEVEL_TIERS.length - 1];
+  }
+
+  /**
+   * 上限按「角色生成」里的公式重算：
+   *   HP = 体质×100×HP乘数 + 五维总和
+   *   MP = (智+精)×50×MP乘数
+   *   SP = (力+敏)×50×MP乘数
+   */
+  function capsOf(attr, lv) {
+    const a = attr || {};
+    const t = tierOfLevel(lv);
+    const v = (k) => Number(a[k]) || 0;
+    const sum = FIVE_ATTR.reduce((s, k) => s + v(k), 0);
+    return {
+      hp: Math.round(v('体质') * 100 * t.hp + sum),
+      mp: Math.round((v('智力') + v('精神')) * 50 * t.mp),
+      sp: Math.round((v('力量') + v('敏捷')) * 50 * t.mp),
+    };
+  }
+
+  /** 当前角色的等级 / 五维 / 上限，从最后一条带 stat_data 的消息读 */
+  function heroStat() {
+    const ms = messageState();
+    if (!ms) return null;
+    const hero = ms.state && ms.state.主角;
+    if (!hero || typeof hero !== 'object') return null;
+    const attr = {};
+    for (const k of FIVE_ATTR) attr[k] = Number((hero.属性 || {})[k]) || 0;
+    return {
+      idx: ms.idx,
+      level: clampLevel(hero.等级),
+      tier: hero.生命层级 || '',
+      attr,
+      point: Number(hero.属性点) || 0,
+      exp: Number(hero.累计经验值) || 0,
+      need: Number(hero.升级所需经验) || 0,
+      caps: {
+        hp: Number(((hero.生命值 || {}).上限 || {})._基础) || 0,
+        mp: Number(((hero.法力值 || {}).上限 || {})._基础) || 0,
+        sp: Number(((hero.体力值 || {}).上限 || {})._基础) || 0,
+      },
+    };
+  }
+
+  /** 把补丁写回那条消息的 stat_data */
+  function writeHeroStat(idx, patch) {    const msgs = getMessages();
+    const m = msgs[idx];
+    if (!m || !patch) return false;
+
+    const th = TH();
+    if (th && typeof th.insertOrAssignVariables === 'function') {
+      try {
+        th.insertOrAssignVariables({ stat_data: patch }, { type: 'message', message_id: idx });
+        return true;
+      } catch (e) { /* 掉到下面的回退 */ }
+    }
+
+    const merge = (dst, src) => {
+      for (const k of Object.keys(src)) {
+        const v = src[k];
+        if (v && typeof v === 'object' && !Array.isArray(v)
+          && dst[k] && typeof dst[k] === 'object' && !Array.isArray(dst[k])) {
+          merge(dst[k], v);
+        } else {
+          dst[k] = v;
+        }
+      }
+      return dst;
+    };
+
+    try {
+      if (!Array.isArray(m.variables)) m.variables = [];
+      let bag = m.variables.find((x) => x && typeof x === 'object' && x.stat_data);
+      if (!bag) { bag = { stat_data: {} }; m.variables.push(bag); }
+      merge(bag.stat_data, patch);
+      const S = host.SillyTavern || window.SillyTavern;
+      if (S && typeof S.saveChat === 'function') S.saveChat();
+      return true;
+    } catch (e) { return false; }
+  }
+
+  /** 「关于 → 调试」里那块：等级 + 五维，写完顺手把上限按公式重算 */
+  function renderDev(box) {
+    if (!box) return;
+    if (!devOpen) { box.innerHTML = ''; return; }
+
+    const h = heroStat();
+    if (!h) {
+      box.innerHTML = '<div class="fl-hint">读不到角色状态（消息变量里没有 stat_data）。'
+        + '先让 AI 出一轮带变量的回复再来。</div>';
+      return;
+    }
+
+    const t = tierOfLevel(h.level);
+    const cap = capsOf(h.attr, h.level);
+    box.innerHTML = `
+      <div class="fl-fix">
+        <label class="fl-fix-r"><k>等级</k>
+          <input id="fl-dev-lv" type="number" min="1" max="25" value="${h.level}"></label>
+        ${FIVE_ATTR.map((k) => `<label class="fl-fix-r"><k>${k}</k>`
+          + `<input id="fl-dev-a-${k}" type="number" min="0" value="${h.attr[k]}"></label>`).join('')}
+        <label class="fl-fix-r"><k>属性点</k>
+          <input id="fl-dev-pt" type="number" min="0" value="${h.point}"></label>
+      </div>
+      <div class="fl-hint">现在：${esc(h.tier || '未标注')}　上限 HP ${h.caps.hp} / MP ${h.caps.mp} / SP ${h.caps.sp}</div>
+      <div class="fl-hint">按公式重算：${esc(t.name)}　HP ${cap.hp} / MP ${cap.mp} / SP ${cap.sp}</div>
+      <div class="fl-dr-act">
+        <button class="fl-btn" type="button" id="fl-dev-save">写入</button>
+      </div>`;
+
+    const btn = box.querySelector('#fl-dev-save');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      const cur = heroStat();
+      if (!cur) { toast('读不到角色状态'); return; }
+
+      const val = (id) => {
+        const el = box.querySelector(id);
+        return el ? Number(el.value) || 0 : 0;
+      };
+
+      const lv = clampLevel(val('#fl-dev-lv'));
+      const attr = {};
+      for (const k of FIVE_ATTR) attr[k] = Math.max(0, Math.round(val('#fl-dev-a-' + k)));
+      const point = Math.max(0, Math.round(val('#fl-dev-pt')));
+
+      const tt = tierOfLevel(lv);
+      const c = capsOf(attr, lv);
+
+      const ok = writeHeroStat(cur.idx, {
+        主角: {
+          等级: lv,
+          生命层级: tt.name,
+          属性点: point,
+          属性: attr,
+          生命值: { 上限: { _基础: c.hp } },
+          法力值: { 上限: { _基础: c.mp } },
+          体力值: { 上限: { _基础: c.sp } },
+        },
+      });
+
+      toast(ok ? '已写入 · ' + tt.name : '写入失败');
+      if (ok) { rescan(true, '属性'); renderDev(box); }
+    });
   }
 
   /* -------------------------------------------------------------- 主题 */
@@ -2999,6 +3171,10 @@
   }
   .fl-fix-r input:focus, .fl-fix-r select:focus { border-color: var(--fl-accent); }
   .fl-fix-r input::placeholder { color: rgba(var(--fl-text-rgb), 0.2); }
+
+  /* 调试入口：就两个字，灰的，点开才有东西 */
+  .fl-dev-link { cursor: pointer; user-select: none; letter-spacing: 1px; }
+  .fl-dev-link:hover { color: var(--fl-dim); }
   .fl-hint { font-size: calc(10px * var(--fl-fs, 1)); color: rgba(var(--fl-text-rgb),0.24); margin-top: 6px; letter-spacing: .4px; }
 
   /* ---- 底栏 ---- */
@@ -3757,6 +3933,10 @@
                 <button class="fl-btn ghost" id="fl-reset-look" type="button" style="width:100%">恢复默认外观</button>
               </div>
             </div>
+            <div class="fl-sec" style="margin-top:16px">
+              <div class="fl-sec-note fl-dev-link" id="fl-dev-link">调试</div>
+              <div id="fl-dev-body"></div>
+            </div>
           </div>
         </div>
       </section>
@@ -4032,6 +4212,16 @@
       syncLookUI();
       toast('外观已恢复默认');
     });
+
+    /* 调试入口：就是「关于」里那两个字，点一下展开 */
+    const devLink = screen.querySelector('#fl-dev-link');
+    const devBody = screen.querySelector('#fl-dev-body');
+    if (devLink && devBody) {
+      devLink.addEventListener('click', () => {
+        devOpen = !devOpen;
+        renderDev(devBody);
+      });
+    }
 
     syncLookUI();
 
