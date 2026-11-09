@@ -3421,6 +3421,9 @@
   const chan = { hook: false, event: false, data: false, msg: false };
   let lastVarSig = '';
   let lastMsgSig = '';
+  /* 上一次真正读到的内容指纹。重 roll 会让消息签名变化、触发重扫，
+     但领地数据其实一个字没变——靠这个指纹把重复的「读取」日志压掉。 */
+  let lastPrint = '';
   let lastFire = '';
   let fires = 0;
   let debounce = null;
@@ -6116,6 +6119,21 @@
 
   /* ------------------------------------------------------------ 扫描 */
   /** 出错不能让面板白掉：记一条日志，把栈留在自检页 */
+  /**
+   * 数据指纹：领地名 + 每个条目的名字/数量/类别。
+   * 只用来判断「这次读到的和上次一不一样」，不参与渲染。
+   */
+  function dataPrint(d) {
+    const parts = [];
+    for (const dm of (d && d.domains) || []) {
+      const items = (dm.items || []).map((i) => (
+        i.name + '=' + i.quantity + '/' + (i.category || '') + (i.missing ? '!' : '')
+      ));
+      parts.push(dm.name + ':' + items.join(','));
+    }
+    return parts.join('|');
+  }
+
   function rescan(manual, why) {
     try {
       return doRescan(manual, why);
@@ -6148,7 +6166,12 @@
     if (star) star.classList.toggle('fl-dim', n === 0);
     chan.data = true; chan.msg = true;
 
-    logPush('read', {
+    /* 重 roll / 切消息都会触发重扫，但领地数据没变时不该再记一条「读取」 */
+    const print = dataPrint(data);
+    const same = !manual && print === lastPrint;
+    lastPrint = print;
+
+    if (!same) logPush('read', {
       t: at,
       why: why || (manual ? '手动' : '自动'),
       src: lastStateSource || '无',
