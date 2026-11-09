@@ -4393,17 +4393,35 @@
         from: '内部资产',
       });
     }
+
+    /* 明细优先。内部资产里只要还有军事条目，就以它为准：
+       总览区块（fief_domain 的「军事」行）里对不上号的编制一律不认。
+       不然删掉一个军团、总览没同步，它就会一直挂在军政页上——吃空饷。 */
+    const hasDetail = map.size > 0;
     for (const u of (d.info && d.info.军事) || []) {
-      const key = u.编制 || '';
+      const key = String(u.编制 || '').trim();
       if (!key) continue;
-      const cur = map.get(key);
+
+      let cur = map.get(key);
+      if (!cur && hasDetail) {
+        /* 写法略有出入（「第三军团」vs「第三军团残部」）也算同一条 */
+        for (const [k, v] of map) {
+          if (k.indexOf(key) >= 0 || key.indexOf(k) >= 0) { cur = v; break; }
+        }
+      }
+
       if (cur) {
         cur.n = numberOf(u.人数) || cur.n;
         cur.tier = u.层级 || cur.tier;
         cur.from = '总览+内部资产';
-      } else {
-        map.set(key, { name: key, n: numberOf(u.人数) || 0, tier: u.层级 || '', status: '', fx: [], from: '总览区块' });
+      } else if (!hasDetail) {
+        /* 没有任何明细时才拿总览兜底 */
+        map.set(key, {
+          name: key, n: numberOf(u.人数) || 0, tier: u.层级 || '',
+          status: '', fx: [], from: '总览区块',
+        });
       }
+      /* hasDetail 且对不上号 → 已经删掉的编制，跳过 */
     }
     return Array.from(map.values()).sort((a, b) => b.n - a.n);
   }
