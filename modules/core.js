@@ -255,18 +255,18 @@
   }
 
   /* -------------------------------------------------------- 属性（等级 / 五维） */
-  /* 等级 → 层级 / 乘数，抄自「核心数值表」：
-     一层 Lv.1-4 · 二层 Lv.5-8 · 三层 Lv.9-12 · 四层 Lv.13-16
-     五层 Lv.17-20 · 六层 Lv.21-24 · 七层 Lv.25
-     HP 乘数 1/2/4/10/20/40/100，MP·SP 乘数 1/2.5/6/15/35/80/160 */
+  /* 等级 → 层级 / 乘数。名字和乘数都抄自卡里的自动化脚本
+     （assets/automation/index.js 里的 T 表与 E/C 两张乘数表）。
+     注意：世界书「核心数值表」写的是「优良 / 稀有」，脚本用的是「中坚 / 精英」，
+     以脚本为准——面板上跑的是脚本那套。 */
   const LEVEL_TIERS = [
     { max: 4, name: '第一层级/普通', hp: 1, mp: 1 },
-    { max: 8, name: '第二层级/优良', hp: 2, mp: 2.5 },
-    { max: 12, name: '第三层级/稀有', hp: 4, mp: 6 },
+    { max: 8, name: '第二层级/中坚', hp: 2, mp: 2.5 },
+    { max: 12, name: '第三层级/精英', hp: 4, mp: 6 },
     { max: 16, name: '第四层级/史诗', hp: 10, mp: 15 },
     { max: 20, name: '第五层级/传说', hp: 20, mp: 35 },
     { max: 24, name: '第六层级/神话', hp: 40, mp: 80 },
-    { max: 25, name: '第七层级/半神', hp: 100, mp: 160 },
+    { max: 25, name: '第七层级/登神', hp: 100, mp: 160 },
   ];
   const FIVE_ATTR = ['力量', '敏捷', '体质', '智力', '精神'];
 
@@ -297,6 +297,34 @@
       mp: Math.round((v('智力') + v('精神')) * 50 * t.mp),
       sp: Math.round((v('力量') + v('敏捷')) * 50 * t.mp),
     };
+  }
+
+  /**
+   * 经验表，原样抄自卡里的自动化脚本（q 表）：
+   *   EXP_NEED[等级] = 从这一级升到下一级还要多少
+   *   EXP_NEED[等级-1] = 升到这一级一共攒了多少（脚本用它做累计经验的下限）
+   * 25 级是 MAX，不再需要经验。
+   */
+  const EXP_NEED = {
+    1: 120, 2: 360, 3: 720, 4: 1200, 5: 2400, 6: 3840, 7: 5520, 8: 7440,
+    9: 11940, 10: 16940, 11: 22440, 12: 28440, 13: 38840, 14: 50040,
+    15: 62040, 16: 74840, 17: 100340, 18: 127340, 19: 155840, 20: 185840,
+    21: 236240, 22: 289040, 23: 344240, 24: 401840,
+  };
+
+  /** 升到下一级还需要多少；25 级返回 'MAX' */
+  function expNeedOf(lv) {
+    const n = clampLevel(lv);
+    if (n >= 25) return 'MAX';
+    return EXP_NEED[n] != null ? EXP_NEED[n] : 0;
+  }
+
+  /** 升到这一级一共攒了多少 */
+  function expTotalOf(lv) {
+    const n = clampLevel(lv);
+    if (n <= 1) return 0;
+    const v = EXP_NEED[n - 1];
+    return v != null ? v : 0;
   }
 
   /** 当前角色的等级 / 五维 / 上限，从最后一条带 stat_data 的消息读 */
@@ -382,11 +410,16 @@
           + `<input id="fl-dev-a-${k}" type="number" min="0" value="${h.attr[k]}"></label>`).join('')}
         <label class="fl-fix-r"><k>属性点</k>
           <input id="fl-dev-pt" type="number" min="0" value="${h.point}"></label>
+        <label class="fl-fix-r"><k>累计经验</k>
+          <input id="fl-dev-exp" type="number" min="0" value="${h.exp}"></label>
+        <label class="fl-fix-r"><k>升级所需</k>
+          <input id="fl-dev-need" type="number" min="0" value="${h.need}"></label>
       </div>
       <div class="fl-hint">现在：${esc(h.tier || '未标注')}　上限 HP ${h.caps.hp} / MP ${h.caps.mp} / SP ${h.caps.sp}</div>
       <div class="fl-hint">按公式重算：${esc(t.name)}　HP ${cap.hp} / MP ${cap.mp} / SP ${cap.sp}</div>
       <div class="fl-dr-act">
         <button class="fl-btn" type="button" id="fl-dev-save">写入</button>
+        <button class="fl-btn ghost" type="button" id="fl-dev-expfill">经验按等级填</button>
       </div>`;
 
     const btn = box.querySelector('#fl-dev-save');
@@ -408,11 +441,20 @@
       const tt = tierOfLevel(lv);
       const c = capsOf(attr, lv);
 
+      const exp = Math.max(0, Math.round(val('#fl-dev-exp')));
+      const needEl = box.querySelector('#fl-dev-need');
+      const needRaw = needEl ? String(needEl.value).trim() : '';
+      const need = /^max$/i.test(needRaw) || lv >= 25
+        ? 'MAX'
+        : Math.max(0, Math.round(Number(needRaw) || 0));
+
       const ok = writeHeroStat(cur.idx, {
         主角: {
           等级: lv,
           生命层级: tt.name,
           属性点: point,
+          累计经验值: exp,
+          升级所需经验: need,
           属性: attr,
           生命值: { 上限: { _基础: c.hp } },
           法力值: { 上限: { _基础: c.mp } },
@@ -422,6 +464,16 @@
 
       toast(ok ? '已写入 · ' + tt.name : '写入失败');
       if (ok) { rescan(true, '属性'); renderDev(box); }
+    });
+
+    /* 经验两栏按等级一键填好：累计 = 升到本级总共攒的，所需 = 升下一级还要多少 */
+    const fill = box.querySelector('#fl-dev-expfill');
+    if (fill) fill.addEventListener('click', () => {
+      const lv = clampLevel(box.querySelector('#fl-dev-lv').value);
+      const e1 = box.querySelector('#fl-dev-exp');
+      const e2 = box.querySelector('#fl-dev-need');
+      if (e1) e1.value = expTotalOf(lv);
+      if (e2) e2.value = expNeedOf(lv);
     });
   }
 

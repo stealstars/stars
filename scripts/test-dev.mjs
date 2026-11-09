@@ -1,11 +1,14 @@
 /**
- * 属性（等级 / 五维）：等级 → 层级 / 乘数，以及上限按公式重算。
+ * 属性（等级 / 五维 / 经验）：层级、乘数、上限公式、经验表。
  *
- * 公式抄自卡片「[本体][额外设定]角色生成」：
+ * 全部抄自卡里的自动化脚本（assets/automation/index.js）：
+ *   T 表    等级 → 层级名
+ *   E / C   等级 → HP 乘数 / MP·SP 乘数
+ *   q 表    等级 → 升级所需经验（q[等级-1] 即本级累计）
+ * 公式：
  *   HP = 体质×100×HP乘数 + 五维总和
- *   MP = (智+精)×50×MP/SP乘数
- *   SP = (力+敏)×50×MP/SP乘数
- * 乘数抄自「[本体][额外设定]核心数值表」。
+ *   MP = (智+精)×50×MP乘数
+ *   SP = (力+敏)×50×MP乘数
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -30,19 +33,19 @@ if (START < 0 || END < 0 || END <= START) {
 }
 const P = new Function(
   CORE.slice(START, END)
-  + '\n; return { tierOfLevel, capsOf, clampLevel, FIVE_ATTR };',
+  + '\n; return { tierOfLevel, capsOf, clampLevel, FIVE_ATTR, expNeedOf, expTotalOf };',
 )();
 
-console.log('=== 1. 等级 → 层级（照核心数值表）===');
+console.log('=== 1. 等级 → 层级（照脚本 T 表）===');
 {
   const cases = [
     [1, '第一层级/普通'], [4, '第一层级/普通'],
-    [5, '第二层级/优良'], [8, '第二层级/优良'],
-    [9, '第三层级/稀有'], [12, '第三层级/稀有'],
+    [5, '第二层级/中坚'], [8, '第二层级/中坚'],
+    [9, '第三层级/精英'], [12, '第三层级/精英'],
     [13, '第四层级/史诗'], [16, '第四层级/史诗'],
     [17, '第五层级/传说'], [20, '第五层级/传说'],
     [21, '第六层级/神话'], [24, '第六层级/神话'],
-    [25, '第七层级/半神'],
+    [25, '第七层级/登神'],
   ];
   for (const [lv, want] of cases) {
     const got = P.tierOfLevel(lv).name;
@@ -82,13 +85,35 @@ console.log('\n=== 3. 上限公式 ===');
   ok('空属性不炸', P.capsOf(null, 5).hp === 0, P.capsOf(null, 5).hp);
 }
 
-console.log('\n=== 4. 五维清单 ===');
+console.log('\n=== 4. 经验表（照脚本 q 表）===');
+{
+  ok('1 级升 2 级要 120', P.expNeedOf(1) === 120, P.expNeedOf(1));
+  ok('2 级升 3 级要 360', P.expNeedOf(2) === 360, P.expNeedOf(2));
+  ok('20 级升 21 级要 185840', P.expNeedOf(20) === 185840, P.expNeedOf(20));
+  ok('24 级升 25 级要 401840', P.expNeedOf(24) === 401840, P.expNeedOf(24));
+  ok('25 级是 MAX', P.expNeedOf(25) === 'MAX', P.expNeedOf(25));
+
+  ok('1 级累计 0', P.expTotalOf(1) === 0, P.expTotalOf(1));
+  ok('2 级累计 120', P.expTotalOf(2) === 120, P.expTotalOf(2));
+  ok('20 级累计 155840', P.expTotalOf(20) === 155840, P.expTotalOf(20));
+  ok('25 级累计 401840', P.expTotalOf(25) === 401840, P.expTotalOf(25));
+
+  let mono = true;
+  for (let i = 2; i <= 25; i += 1) if (P.expTotalOf(i) <= P.expTotalOf(i - 1)) mono = false;
+  ok('累计经验随等级单调递增', mono);
+
+  let inc = true;
+  for (let i = 2; i <= 24; i += 1) if (P.expNeedOf(i) <= P.expNeedOf(i - 1)) inc = false;
+  ok('升级所需逐级递增', inc);
+}
+
+console.log('\n=== 5. 五维清单 ===');
 {
   ok('正好五项', P.FIVE_ATTR.length === 5, P.FIVE_ATTR.length);
   ok('是力敏体智精', P.FIVE_ATTR.join('') === '力量敏捷体质智力精神', P.FIVE_ATTR.join(''));
 }
 
-console.log('\n=== 5. 源码接线 ===');
+console.log('\n=== 6. 源码接线 ===');
 {
   ok('有写入函数', /function writeHeroStat\(idx, patch\)/.test(CORE));
   ok('优先用酒馆助手接口', /th\.insertOrAssignVariables\(\{ stat_data: patch \}/.test(CORE));
@@ -98,6 +123,10 @@ console.log('\n=== 5. 源码接线 ===');
   ok('面板容器在', /id="fl-dev-body"/.test(CORE));
   ok('点开才渲染', /if \(!devOpen\) \{ box\.innerHTML = ''; return; \}/.test(CORE));
   ok('写入后重扫', /if \(ok\) \{ rescan\(true, '属性'\); renderDev\(box\); \}/.test(CORE));
+  ok('写入了累计经验值', /累计经验值: exp,/.test(CORE));
+  ok('写入了升级所需经验', /升级所需经验: need,/.test(CORE));
+  ok('有经验一键填按钮', /id="fl-dev-expfill"/.test(CORE));
+  ok('满级写成 MAX', /lv >= 25[\s\S]{0,40}'MAX'/.test(CORE));
 }
 
 console.log('\n' + (fail ? fail + ' 项失败  ' : '全部通过 ✔  ') + (pass + fail) + ' 项');
