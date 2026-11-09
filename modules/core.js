@@ -210,6 +210,49 @@
 
   function savePrefs(p) { try { host.localStorage.setItem(PREF_KEY, JSON.stringify(p)); } catch (e) { /* 忽略 */ } }
 
+  /* -------------------------------------------------------------- 修正 */
+  /**
+   * 读错了手动改。只覆盖显示，不动世界书、不动聊天变量。
+   * 索引键是「领地名::条目原名」——改了名之后仍然认得是这一条。
+   * 按聊天隔离：同一个领地名在不同聊天里可能是两回事。
+   */
+  const FIX_KEY = 'fief-ledger-fixes-v1';
+  let fixes = {};
+
+  function loadFixes() {
+    try {
+      const r = host.localStorage.getItem(FIX_KEY + ':' + currentChatId());
+      const o = r ? JSON.parse(r) : null;
+      return o && typeof o === 'object' ? o : {};
+    } catch (e) { return {}; }
+  }
+
+  function saveFixes(o) {
+    try { host.localStorage.setItem(FIX_KEY + ':' + currentChatId(), JSON.stringify(o || {})); }
+    catch (e) { /* 忽略 */ }
+  }
+
+  /** 把修正套到解析结果上。字段留空表示不改。 */
+  function applyFixes(d) {
+    if (!d || !d.domains) return;
+    if (!fixes || !Object.keys(fixes).length) fixes = loadFixes();
+    if (!Object.keys(fixes).length) return;
+
+    for (const dm of d.domains) {
+      for (const it of dm.items || []) {
+        const k = dm.name + '::' + (it.rawName || it.name);
+        const f = fixes[k];
+        if (!f) continue;
+        if (!it.rawName) it.rawName = it.name;
+        if (f.name) it.name = f.name;
+        if (f.quantity != null && f.quantity !== '') it.quantity = f.quantity;
+        if (f.category) it.category = f.category;
+        if (f.status) it.status = f.status;
+        it.fixed = true;
+      }
+    }
+  }
+
   /* -------------------------------------------------------------- 主题 */
   // 一套主题 = 一个主色。背景、描边、星标球面全由主色推出来，
   // 所以换色不会出现「冷色主色 + 暖黑底」这种拼接感。
@@ -548,6 +591,50 @@
 
   const UNIT_OF = { 千: 1e3, 万: 1e4, 亿: 1e8, 万亿: 1e12 };
 
+  const CN_DIGIT = {
+    零: 0, 〇: 0, 一: 1, 壹: 1, 二: 2, 两: 2, 贰: 2, 三: 3, 叁: 3, 四: 4, 肆: 4,
+    五: 5, 伍: 5, 六: 6, 陆: 6, 七: 7, 柒: 7, 八: 8, 捌: 8, 九: 9, 玖: 9,
+  };
+  const CN_UNIT = { 十: 10, 拾: 10, 百: 100, 佰: 100, 千: 1000, 仟: 1000, 万: 1e4, 亿: 1e8 };
+
+  /**
+   * 中文数字：「三千」3000、「五百」500、「十二」12、「一万二」12000。
+   * 认不出返回 null——宁可显示空，也别显示一个错数。
+   */
+  function cnNumber(v) {
+    const s = String(v == null ? '' : v);
+    let total = 0;
+    let section = 0;
+    let digit = null;
+    let lastBig = 0;
+    let hit = false;
+
+    for (const ch of s) {
+      if (CN_DIGIT[ch] != null) { digit = CN_DIGIT[ch]; hit = true; continue; }
+      const u = CN_UNIT[ch];
+      if (u == null) continue;   // 别的字（人、约、军…）跳过，不影响
+
+      hit = true;
+      if (u >= 1e4) {
+        section += (digit == null ? 1 : digit);
+        total += (section || 1) * u;
+        section = 0;
+        lastBig = u;
+      } else {
+        section += (digit == null ? 1 : digit) * u;
+      }
+      digit = null;
+    }
+
+    if (digit != null) {
+      /* 「一万二」的口语：万后面的孤字是千位，不是个位 */
+      section += lastBig ? digit * (lastBig / 10) : digit;
+    }
+
+    const n = total + section;
+    return hit && n > 0 ? n : null;
+  }
+
   /** 取第一个数字，认得「1.5亿」「3 个月」这种写法 */
   function numberOf(v) {
     const s = String(v == null ? '' : v);
@@ -567,7 +654,7 @@
         break;
       }
     }
-    if (!num) return null;
+    if (!num) return cnNumber(s);
     const n = parseFloat(num);
     return isNaN(n) ? null : sign * n;
   }
@@ -2883,12 +2970,35 @@
   .fl-desc { font-size: calc(12.5px * var(--fl-fs, 1)); line-height: 1.9; color: rgba(var(--fl-text-rgb),0.76); }
   .fl-note {
     width: 100%; box-sizing: border-box; min-height: 76px; resize: vertical;
-    background: rgba(10,9,6,0.6); border: 1px solid var(--fl-line); border-radius: 3px;
+    background: var(--fl-bg2); border: 1px solid var(--fl-line); border-radius: 3px;
     color: var(--fl-text); font: inherit; font-size: calc(12.5px * var(--fl-fs, 1)); padding: 10px 12px;
     outline: none; line-height: 1.75; transition: border-color .16s;
   }
   .fl-note::placeholder { color: rgba(var(--fl-text-rgb),0.2); }
   .fl-note:focus { border-color: var(--fl-line2); }
+
+  /* 修正表单：输入框一律实底，半透明在暗底上看不清 */
+  .fl-fix { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .fl-fix-r { display: flex; align-items: center; gap: 10px; }
+  .fl-fix-r k {
+    flex: 0 0 42px;
+    font-size: calc(11px * var(--fl-fs, 1));
+    letter-spacing: 1.4px; color: var(--fl-dim);
+  }
+  .fl-fix-r input, .fl-fix-r select {
+    flex: 1 1 auto; min-width: 0;
+    font-family: inherit;
+    font-size: calc(12px * var(--fl-fs, 1));
+    color: var(--fl-text);
+    background: var(--fl-bg2);
+    border: 1px solid var(--fl-line2);
+    border-radius: 2px;
+    padding: 6px 9px;
+    outline: none;
+    -webkit-appearance: none;
+  }
+  .fl-fix-r input:focus, .fl-fix-r select:focus { border-color: var(--fl-accent); }
+  .fl-fix-r input::placeholder { color: rgba(var(--fl-text-rgb), 0.2); }
   .fl-hint { font-size: calc(10px * var(--fl-fs, 1)); color: rgba(var(--fl-text-rgb),0.24); margin-top: 6px; letter-spacing: .4px; }
 
   /* ---- 底栏 ---- */
@@ -5842,6 +5952,31 @@
         </div></div>`
       : '';
 
+    /* 修正：读错了手动改，只覆盖显示 */
+    const fixKey = it.domain + '::' + (it.rawName || it.name);
+    const fix = fixes[fixKey] || {};
+    const fixCats = CATEGORIES.slice();
+    if (it.category && fixCats.indexOf(it.category) < 0) fixCats.unshift(it.category);
+    const fixHtml = `
+        <div class="fl-sec">
+          <div class="fl-sec-h"><span>修 正</span><s></s><em>${it.fixed ? '已改' : ''}</em></div>
+          <div class="fl-hint" style="margin-top:0">读错了就在这里改。只改面板显示，不动世界书、不动变量。</div>
+          <div class="fl-fix">
+            <label class="fl-fix-r"><k>名称</k>
+              <input id="fl-fix-name" type="text" value="${esc(fix.name || it.name)}" placeholder="${esc(it.name)}"></label>
+            <label class="fl-fix-r"><k>数量</k>
+              <input id="fl-fix-qty" type="text" value="${esc(fix.quantity != null ? fix.quantity : it.quantity)}"></label>
+            <label class="fl-fix-r"><k>类别</k>
+              <select id="fl-fix-cat">${fixCats.map((c) => `<option value="${esc(c)}"${(fix.category || it.category) === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+            <label class="fl-fix-r"><k>状态</k>
+              <input id="fl-fix-st" type="text" value="${esc(fix.status || it.status)}"></label>
+          </div>
+          <div class="fl-dr-act">
+            <button class="fl-btn" type="button" id="fl-fix-save">保存修正</button>
+            <button class="fl-btn ghost" type="button" id="fl-fix-clear">撤销修正</button>
+          </div>
+        </div>`;
+
     const evs = (it.events || []).length
       ? `<div class="fl-sec"><div class="fl-sec-h"><span>变 更 记 录</span><s></s><em>${it.events.length} 条</em></div>
           <div class="fl-timeline">${it.events.map((e) => {
@@ -5870,6 +6005,7 @@
         ${fx}
         ${it.desc ? `<div class="fl-sec"><div class="fl-sec-h"><span>描 述</span><s></s></div><div class="fl-desc">${esc(it.desc)}</div></div>` : ''}
         ${evs}
+        ${fixHtml}
         <div class="fl-sec">
           <div class="fl-sec-h"><span>批 注</span><s></s></div>
           <textarea class="fl-note" id="fl-note" placeholder="补一句设定、记一个钩子，只有你看得到…">${esc(hasNote ? notes[key] : '')}</textarea>
@@ -5896,6 +6032,45 @@
         render();
       });
     }
+    /* ---- 修正：保存 / 撤销 ---- */
+    const fixSave = drawerEl.querySelector('#fl-fix-save');
+    if (fixSave) fixSave.addEventListener('click', () => {
+      const val = (id) => {
+        const el = drawerEl.querySelector(id);
+        return el ? String(el.value == null ? '' : el.value).trim() : '';
+      };
+      const name = val('#fl-fix-name');
+      const qty = val('#fl-fix-qty');
+      const cat = val('#fl-fix-cat');
+      const st = val('#fl-fix-st');
+
+      fixes = loadFixes();
+      const rec = {};
+      if (name && name !== (it.rawName || it.name)) rec.name = name;
+      if (qty !== String(it.quantity == null ? '' : it.quantity)) rec.quantity = qty;
+      if (cat && cat !== it.category) rec.category = cat;
+      if (st !== String(it.status || '')) rec.status = st;
+
+      if (Object.keys(rec).length) fixes[fixKey] = rec;
+      else delete fixes[fixKey];
+      saveFixes(fixes);
+
+      toast(Object.keys(rec).length ? '已保存修正' : '没有改动');
+      closeDrawer();
+      rescan(true, '修正');
+    });
+
+    const fixClear = drawerEl.querySelector('#fl-fix-clear');
+    if (fixClear) fixClear.addEventListener('click', () => {
+      fixes = loadFixes();
+      if (!fixes[fixKey]) { toast('这条没有修正'); return; }
+      delete fixes[fixKey];
+      saveFixes(fixes);
+      toast('已撤销修正');
+      closeDrawer();
+      rescan(true, '撤销修正');
+    });
+
     bindNote();
   }
 
@@ -6148,6 +6323,7 @@
     fires += 1;
     const at = Date.now();
     data = buildLedger();
+    applyFixes(data);
     notes = readNotesFallback();
 
     // 建筑档案库：只在指纹变了才写变量，避免 1.2 秒一次的写盘

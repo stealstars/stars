@@ -102,5 +102,39 @@ console.log('\n=== 5. 非军事类别不混进来 ===');
   ok('只出军事条目', r.length === 1 && r[0].name === 'b军团', r.map((x) => x.name).join(','));
 }
 
+/* ---------- 6. 人数写法 ---------- */
+console.log('\n=== 6. 人数写法 ===');
+{
+  function cut(mark) {
+    const at = CORE.indexOf(mark);
+    let i = CORE.indexOf('{', at);
+    let d = 0;
+    for (; i < CORE.length; i += 1) {
+      if (CORE[i] === '{') d += 1;
+      else if (CORE[i] === '}') { d -= 1; if (!d) return CORE.slice(at, i + 1) + ';'; }
+    }
+    throw new Error('抠不出 ' + mark);
+  }
+  const src = [
+    cut('  const CN_DIGIT = {'),
+    cut('  const CN_UNIT = {'),
+    'const UNIT_OF={千:1e3,万:1e4,亿:1e8,万亿:1e12};',
+    cut('  function cnNumber(v) {'),
+    cut('  function numberOf(v) {'),
+  ].join('\n');
+  const N = new Function(src + '; return numberOf;')();
+
+  ok('阿拉伯数字', N('5000') === 5000);
+  ok('带千分位', N('5,000') === 5000);
+  ok('万作单位', N('1.5万') === 15000);
+  ok('中文三千', N('三千') === 3000, N('三千'));
+  ok('中文五百', N('五百') === 500, N('五百'));
+  ok('中文十二', N('十二') === 12, N('十二'));
+  ok('口语一万二', N('一万二') === 12000, N('一万二'));
+  ok('一万五', N('一万五') === 15000, N('一万五'));
+  ok('带说明也能读', N('约三千人') === 3000, N('约三千人'));
+  ok('认不出给 null', N('无') === null, N('无'));
+}
+
 console.log('\n' + (fail ? fail + ' 项失败  ' : '全部通过 ✔  ') + (pass + fail) + ' 项');
 process.exit(fail ? 1 : 0);
