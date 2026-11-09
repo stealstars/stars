@@ -179,12 +179,76 @@ console.log('\n=== 6. 登神长阶 ===');
   ok('空值不炸', L.ladderOf(null).seat === '', L.ladderOf(null).seat);
 }
 
-console.log('\n=== 7. 源码接线 ===');
+console.log('\n=== 7. 写入不能残留旧键 ===');
+{
+  const S = CORE.indexOf('  /**\n   * 把补丁写回那条消息的 stat_data。');
+  const E = CORE.indexOf('  /** 展开前的警告');
+  ok('切得出 writeHeroStat', S > 0 && E > S);
+  const W = new Function(
+    'const getMessages = () => globalThis.__msgs;\n'
+    + 'const host = { SillyTavern: null };\n'
+    + 'const window = {};\n'
+    + CORE.slice(S, E)
+    + '\n; return writeHeroStat;',
+  )();
+
+  const mk = () => ({
+    variables: {
+      stat_data: {
+        主角: { 等级: 1, 登神长阶: { 要素: { 火焰: { 效果: 'a' } }, 权能: {}, 法则: {} } },
+      },
+    },
+  });
+
+  const m1 = mk();
+  globalThis.__msgs = [m1];
+  W(0, { 主角: { 登神长阶: { 要素: { 雷霆: { 效果: 'b' } }, 权能: {}, 法则: {} } } });
+  const lad = m1.variables.stat_data.主角.登神长阶;
+  ok('火焰没了', !('火焰' in lad.要素), Object.keys(lad.要素).join(','));
+  ok('雷霆进来了', !!(lad.要素['雷霆'] && lad.要素['雷霆'].效果 === 'b'));
+  ok('要素只剩一个键', Object.keys(lad.要素).length === 1, Object.keys(lad.要素).length);
+
+  /* variables 是数组时也得认 */
+  const m2 = { variables: [{ stat_data: { 主角: { 登神长阶: { 要素: { 火: {} } } } } }] };
+  globalThis.__msgs = [m2];
+  W(0, { 主角: { 登神长阶: { 要素: { 水: {} } } } });
+  ok('数组形态也能换掉', Object.keys(m2.variables[0].stat_data.主角.登神长阶.要素).join('') === '水',
+    Object.keys(m2.variables[0].stat_data.主角.登神长阶.要素).join(','));
+
+  /* 别把同一条消息里的其它变量清掉 */
+  const m3 = { variables: { foo: 1, stat_data: { 主角: {} } } };
+  globalThis.__msgs = [m3];
+  W(0, { 主角: { 等级: 5 } });
+  ok('别的变量还在', m3.variables.foo === 1, m3.variables.foo);
+  ok('等级写进去了', m3.variables.stat_data.主角.等级 === 5);
+
+  /* 属性只覆盖给的字段 */
+  const m4 = mk();
+  m4.variables.stat_data.主角.属性 = { 力量: 1, 敏捷: 2 };
+  globalThis.__msgs = [m4];
+  W(0, { 主角: { 属性: { 力量: 9 } } });
+  ok('力量改了', m4.variables.stat_data.主角.属性.力量 === 9);
+  ok('敏捷没丢', m4.variables.stat_data.主角.属性.敏捷 === 2);
+
+  /* 上限只覆盖 _基础，额外留着 */
+  const m5 = mk();
+  m5.variables.stat_data.主角.生命值 = { 当前: 10, 上限: { _基础: 100, 额外: 50 } };
+  globalThis.__msgs = [m5];
+  W(0, { 主角: { 生命值: { 上限: { _基础: 200 } } } });
+  const hp = m5.variables.stat_data.主角.生命值;
+  ok('_基础 改了', hp.上限._基础 === 200, hp.上限._基础);
+  ok('额外 留着', hp.上限.额外 === 50, hp.上限.额外);
+  ok('当前 留着', hp.当前 === 10, hp.当前);
+}
+
+console.log('\n=== 8. 源码接线 ===');
 {
   ok('有写入函数', /function writeHeroStat\(idx, patch\)/.test(CORE));
-  ok('优先用酒馆助手接口', /th\.insertOrAssignVariables\(\{ stat_data: patch \}/.test(CORE));
-  ok('有回退写消息变量', /merge\(bag\.stat_data, patch\)/.test(CORE));
+  ok('不用深合并接口', !/th\.insertOrAssignVariables\(\{ stat_data: patch \}/.test(CORE));
+  ok('要素整张表换掉', /if \(lk === '要素' \|\| lk === '权能' \|\| lk === '法则'\)/.test(CORE));
   ok('回退会保存聊天', /S\.saveChat\(\)/.test(CORE));
+  ok('认数组形态的 variables', /if \(Array\.isArray\(m\.variables\)\)/.test(CORE));
+  ok('也认对象形态', /else if \(m\.variables && typeof m\.variables === 'object'\)/.test(CORE));
   ok('入口是「关于」里的灰字', /id="fl-dev-link"/.test(CORE));
   ok('面板容器在', /id="fl-dev-body"/.test(CORE));
   ok('点开才渲染', /if \(!devOpen\) \{ box\.innerHTML = ''; return; \}/.test(CORE));

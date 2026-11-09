@@ -434,37 +434,71 @@
   }
 
   /** 把补丁写回那条消息的 stat_data */
+  /**
+   * 把补丁写回那条消息的 stat_data。
+   *
+   * 不能用 insertOrAssignVariables / lodash.merge：它们都是深合并，
+   * 把登神长阶的「火焰」改成「雷霆」会变成两个都留着，界面上看就是改不动。
+   * 所以这里自己逐字段覆盖，要素 / 权能 / 法则 三张表整张换掉。
+   */
   function writeHeroStat(idx, patch) {
     const msgs = getMessages();
     const m = msgs[idx];
-    if (!m || !patch) return false;
-
-    const th = TH();
-    if (th && typeof th.insertOrAssignVariables === 'function') {
-      try {
-        th.insertOrAssignVariables({ stat_data: patch }, { type: 'message', message_id: idx });
-        return true;
-      } catch (e) { /* 掉到下面的回退 */ }
-    }
-
-    const merge = (dst, src) => {
-      for (const k of Object.keys(src)) {
-        const v = src[k];
-        if (v && typeof v === 'object' && !Array.isArray(v)
-          && dst[k] && typeof dst[k] === 'object' && !Array.isArray(dst[k])) {
-          merge(dst[k], v);
-        } else {
-          dst[k] = v;
-        }
-      }
-      return dst;
-    };
+    if (!m || !patch || typeof patch !== 'object') return false;
 
     try {
-      if (!Array.isArray(m.variables)) m.variables = [];
-      let bag = m.variables.find((x) => x && typeof x === 'object' && x.stat_data);
-      if (!bag) { bag = { stat_data: {} }; m.variables.push(bag); }
-      merge(bag.stat_data, patch);
+      /* variables 可能是数组（酒馆助手那样一条消息挂多个包），也可能直接是个对象。
+         两种都得认，别把用户已有的变量清掉。 */
+      let bag = null;
+      if (Array.isArray(m.variables)) {
+        bag = m.variables.find((x) => x && typeof x === 'object' && x.stat_data) || null;
+        if (!bag) { bag = { stat_data: {} }; m.variables.push(bag); }
+      } else if (m.variables && typeof m.variables === 'object') {
+        if (!m.variables.stat_data || typeof m.variables.stat_data !== 'object') {
+          m.variables.stat_data = {};
+        }
+        bag = m.variables;
+      } else {
+        m.variables = { stat_data: {} };
+        bag = m.variables;
+      }
+      if (!bag.stat_data || typeof bag.stat_data !== 'object') bag.stat_data = {};
+
+      const hero = (bag.stat_data.主角 && typeof bag.stat_data.主角 === 'object')
+        ? bag.stat_data.主角 : {};
+      const next = patch.主角 || {};
+
+      for (const k of Object.keys(next)) {
+        const v = next[k];
+
+        if (k === '登神长阶') {
+          const lad = (hero.登神长阶 && typeof hero.登神长阶 === 'object') ? hero.登神长阶 : {};
+          for (const lk of Object.keys(v || {})) {
+            if (lk === '要素' || lk === '权能' || lk === '法则') {
+              lad[lk] = (v[lk] && typeof v[lk] === 'object') ? { ...v[lk] } : {};
+            } else if (lk === '神国') {
+              const old = (lad.神国 && typeof lad.神国 === 'object') ? lad.神国 : {};
+              lad.神国 = { ...old, ...(v[lk] || {}) };
+            } else {
+              lad[lk] = v[lk];
+            }
+          }
+          hero.登神长阶 = lad;
+        } else if (k === '属性') {
+          const old = (hero.属性 && typeof hero.属性 === 'object') ? hero.属性 : {};
+          hero.属性 = { ...old, ...(v || {}) };
+        } else if (k === '生命值' || k === '法力值' || k === '体力值') {
+          const cur = (hero[k] && typeof hero[k] === 'object') ? hero[k] : {};
+          const oldCap = (cur.上限 && typeof cur.上限 === 'object') ? cur.上限 : {};
+          cur.上限 = { ...oldCap, ...((v && v.上限) || {}) };
+          hero[k] = cur;
+        } else {
+          hero[k] = v;
+        }
+      }
+
+      bag.stat_data.主角 = hero;
+
       const S = host.SillyTavern || window.SillyTavern;
       if (S && typeof S.saveChat === 'function') S.saveChat();
       return true;
