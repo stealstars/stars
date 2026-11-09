@@ -462,5 +462,34 @@ ok('分支有代价', /代价/.test(hb2));
 ok('分支有终点', /终点/.test(hb2));
 T.setBrief(false);
 
+/* ---------- 17. 参考数据剩余字段 ---------- */
+console.log('\n=== 17. 参考数据剩余字段 ===');
+T.setCountry('奥古斯提姆帝国');
+T.setDone([]);
+T.setSel(null);
+T.setBrief(true);
+const h17 = T.html();
+ok('节点带图标', /fx-node-ic/.test(h17));
+ok('图标字符在', /♛|⚒|⚗|⚖|✉|⚔/.test(h17));
+ok('持续型标了「持续」', /持续/.test(h17));
+ok('核心分支有理由', /fx-branch-core/.test(h17));
+ok('关键词显示了', /关键词/.test(h17));
+ok('关系带链条', /· /.test(h17));
+
+T.setSel('chiyuan_trial');
+ok('详情标了「仅当」', /仅当/.test(T.html()));
+
+/* negate：要的是「还没有这个能力」，不能当正向判 */
+{
+  const tr17 = T.tree();
+  const nf = tr17.nodes.find((n) => n.id === 'family_charters');
+  const rl = T.reqList(tr17, nf);
+  const neg = rl.find((r) => /尚未/.test(r.label));
+  ok('negate 条件出现在列表里', !!neg, JSON.stringify(rl));
+  ok('negate 判为满足（该能力还没拿到）', !!(neg && neg.ok === true), neg && neg.ok);
+}
+T.setSel(null);
+T.setBrief(false);
+
 console.log('\n' + (fail ? fail + ' 项失败  ' : '全部通过 ✔  ') + (pass + fail) + ' 项');
 process.exit(fail ? 1 : 0);

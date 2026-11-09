@@ -177,7 +177,13 @@
     const m = meters(tr);
     return (n.requirements || []).map((r) => {
       if (r.kind === 'capability') {
-        return { label: r.label || ('需要 ' + r.id), ok: hasCap(tr, r.id) };
+        const has = hasCap(tr, r.id);
+        /* negate：要的是「还没有这个能力」。
+           例：军需弊案尚未公诸于众，家族才肯签约。当正向判就永远反着。 */
+        return {
+          label: r.label || ((r.negate ? '尚未 ' : '需要 ') + r.id),
+          ok: r.negate ? !has : has,
+        };
       }
       if (r.kind === 'stability') {
         return { label: r.label || ('稳定度至少 ' + r.minimum), ok: m.stability >= (r.minimum || 0) };
@@ -467,10 +473,17 @@
   }
 
   /* ------------------------------------------------------------ 渲染 */
+  /* 参考数据里每个焦点都带 icon（crown / industry / science / trade / diplomacy / army） */
+  const ICON_CH = {
+    crown: '♛', industry: '⚒', science: '⚗',
+    trade: '⚖', diplomacy: '✉', army: '⚔',
+  };
+
   function nodeHtml(tr, n, st) {
     const cls = ['fx-node', st];
     if (sel === n.id) cls.push('sel');
     const pivotal = n.impact === 'pivotal' ? '<i class="fx-node-piv"></i>' : '';
+    const ic = ICON_CH[n.icon] || '';
     let meta = '';
     if (st === 'running') {
       const r = running.get(n.id);
@@ -478,9 +491,13 @@
     } else if (typeof n.days === 'number') {
       meta = n.days + ' 天';
     }
+    /* execution = ongoing：这件事不是一次做完，是要一直维持的 */
+    if (n.execution === 'ongoing') meta += (meta ? '　' : '') + '持续';
     return '<div class="' + cls.join(' ') + '" data-node="' + escFn(n.id) + '">'
       + pivotal
-      + '<div class="fx-node-n">' + escFn(n.name) + '</div>'
+      + '<div class="fx-node-n">'
+      + (ic ? '<span class="fx-node-ic">' + ic + '</span>' : '')
+      + escFn(n.name) + '</div>'
       + '<div class="fx-node-m">' + escFn(meta) + '</div>'
       + '</div>';
   }
@@ -512,6 +529,10 @@
       + '<i>' + cnt + ' / ' + mine.length + '</i>'
       + '</div>'
       + (b.purpose ? '<div class="fx-branch-h"><em>' + escFn(b.purpose) + '</em></div>' : '')
+      /* coreReason：为什么这条是本期的主要矛盾 */
+      + (b.core && b.coreReason
+        ? '<div class="fx-branch-h"><em class="fx-branch-core">' + escFn(b.coreReason) + '</em></div>'
+        : '')
       /* 谁推、谁挡、要付什么代价——国策的张力全在这三行里 */
       + ((b.supporters || b.opposition || b.tradeoff)
         ? '<div class="fx-branch-x">'
@@ -525,13 +546,27 @@
       + '</div>';
   }
 
+  /** effect.when：这条效果只在某些事实/能力成立时才生效 */
+  function whenText(e) {
+    const w = e && e.when;
+    if (!Array.isArray(w) || !w.length) return '';
+    return w.map((x) => (x && (x.label || x.id)) || '').filter(Boolean).join('；');
+  }
+
   function fmtEffects(n) {
     const out = [];
     for (const e of n.effects || []) {
-      if (e.kind === 'capability') out.push('获得能力「' + (e.name || e.key) + '」');
-      else if (e.kind === 'commitment') out.push('承担义务「' + (e.name || e.key) + '」');
-      else if (e.kind === 'stability') out.push('稳定 ' + (e.value > 0 ? '+' : '') + e.value);
-      else if (e.kind === 'warSupport') out.push('战争支持 ' + (e.value > 0 ? '+' : '') + e.value);
+      let t = '';
+      if (e.kind === 'capability') t = '获得能力「' + (e.name || e.key) + '」';
+      else if (e.kind === 'commitment') t = '承担义务「' + (e.name || e.key) + '」';
+      else if (e.kind === 'stability') t = '稳定 ' + (e.value > 0 ? '+' : '') + e.value;
+      else if (e.kind === 'warSupport') t = '战争支持 ' + (e.value > 0 ? '+' : '') + e.value;
+      else continue;
+
+      const w = whenText(e);
+      if (w) t += '　仅当：' + w;
+      if (e.active === false) t += '　（未生效）';
+      out.push(t);
     }
     return out;
   }
@@ -579,13 +614,21 @@
         out += '<div class="fx-brief-sec"><k>焦点关系</k><ul>'
           + tr.relations.map((r) => '<li>' + escFn(nm(r.from)) + ' → ' + escFn(nm(r.to))
             + (r.kind ? '　<i>' + escFn(r.kind) + '</i>' : '')
-            + (r.change ? '<s>' + escFn(r.change) + '</s>' : '') + '</li>').join('')
+            + (r.change ? '<s>' + escFn(r.change) + '</s>' : '')
+            + ((r.via || []).length
+              ? '<s>' + r.via.map((v) => '· ' + escFn(v)).join('<br>') + '</s>'
+              : '')
+            + '</li>').join('')
           + '</ul></div>';
       }
       if ((tr.historical || []).length) {
         out += '<div class="fx-brief-sec"><k>历史</k><ul>'
           + tr.historical.map((x) => '<li>' + escFn(x && x.text ? x.text : x) + '</li>').join('')
           + '</ul></div>';
+      }
+      if ((tr.keywords || []).length) {
+        out += '<div class="fx-brief-sec"><k>关键词</k><p>'
+          + tr.keywords.map((x) => escFn(x)).join('　·　') + '</p></div>';
       }
       if (tr.evidence) {
         out += '<div class="fx-brief-sec"><k>世界书出处</k><p>' + escFn(tr.evidence) + '</p></div>';

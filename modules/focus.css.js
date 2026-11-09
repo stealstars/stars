@@ -105,6 +105,13 @@
     font-style: normal; font-size: calc(10.5px * var(--fl-fs, 1)); line-height: 1.6;
     color: var(--fl-dimmer); flex: 1; min-width: 0;
   }
+  /* 核心分支的理由：为什么这一条是本期的主要矛盾 */
+  .fx-branch-h em.fx-branch-core {
+    color: var(--fl-dim);
+    border-left: 2px solid rgba(var(--fl-accent-rgb), .4);
+    padding-left: 9px;
+    margin-top: 2px;
+  }
 
   /* ---- 列（按前置深度） ---- */
   .fx-cols {
@@ -162,6 +169,16 @@
     width: 0; height: 0; border-top: 7px solid rgba(var(--fl-accent-rgb), .55);
     border-left: 7px solid transparent;
   }
+  /* 焦点图标：数据里带的 crown / industry / science / trade / diplomacy / army */
+  .fx-node-ic {
+    display: inline-block;
+    margin-right: 4px;
+    font-size: calc(10px * var(--fl-fs, 1));
+    line-height: 1;
+    vertical-align: 1px;
+    color: var(--fl-dimmer);
+  }
+  .fx-node.done .fx-node-ic { color: var(--fl-accent); }
 
   /* 已完成 */
   .fx-node.done {
