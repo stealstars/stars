@@ -119,41 +119,59 @@ console.log('\n=== 6. 登神长阶 ===');
   const E = CORE.indexOf('  /** 把补丁写回那条消息的 stat_data */');
   ok('切得出长阶那一段', S > 0 && E > S);
   const L = new Function(
-    CORE.slice(S, E) + '\n; return { ladderOf, parseLadder, ladderText, ladderPatch };',
+    'const esc = (s) => String(s == null ? "" : s);\n'
+    + CORE.slice(S, E)
+    + '\n; return { ladderOf, ladderRowsHtml, readLadderRows, takeObj, ladderPatch };',
   )();
 
-  const two = L.parseLadder('火焰亲和\n水之呼吸|抗性提升', 3);
-  ok('两行解析成两项', Object.keys(two).length === 2, Object.keys(two).join(','));
-  ok('名称原样保留', !!two['火焰亲和'] && !!two['水之呼吸']);
-  ok('竖线后面是效果', two['水之呼吸'].效果 === '抗性提升', two['水之呼吸'].效果);
-  ok('没效果的给空对象', JSON.stringify(two['火焰亲和']) === '{}', JSON.stringify(two['火焰亲和']));
+  /* 渲染：存档里有两项，界面该长出三组、前两组带值 */
+  const html = L.ladderRowsHtml('el', 3, { 火焰亲和: {}, 水之呼吸: { 效果: '抗性提升' } });
+  ok('渲染出三组', (html.match(/fl-lad-row/g) || []).length === 3,
+    (html.match(/fl-lad-row/g) || []).length);
+  ok('名称填进去了', /value="火焰亲和"/.test(html));
+  ok('效果填进去了', /抗性提升/.test(html));
+  ok('空的那组没有值', /id="fl-dev-el-n2" type="text" value=""/.test(html));
 
-  ok('超过上限截断', Object.keys(L.parseLadder('a\nb\nc\nd', 3)).length === 3);
-  ok('空行跳过', Object.keys(L.parseLadder('\n\na\n\n', 3)).length === 1);
-  ok('空文本给空对象', Object.keys(L.parseLadder('', 3)).length === 0);
-  ok('回写成文本', L.ladderText({ a: {}, b: { 效果: 'x' } }) === 'a\nb|x', L.ladderText({ a: {}, b: { 效果: 'x' } }));
+  /* 读回：模拟一下 DOM */
+  const fake = (vals) => ({
+    querySelector: (sel) => {
+      const m = /#fl-dev-(el|pw|lw)-([ne])(\d)/.exec(sel);
+      if (!m) return null;
+      const k = m[1] + m[2] + m[3];
+      return Object.prototype.hasOwnProperty.call(vals, k) ? { value: vals[k] } : null;
+    },
+  });
+  const rows = L.readLadderRows(fake({
+    eln0: '火焰亲和', eln1: '水之呼吸', ele1: '抗性提升', eln2: '  ',
+  }), 'el', 3);
+  ok('读到两项', Object.keys(rows).length === 2, Object.keys(rows).join(','));
+  ok('空名称跳过', !rows[''] && !rows['  ']);
+  ok('效果读进来了', rows['水之呼吸'].效果 === '抗性提升', JSON.stringify(rows['水之呼吸']));
+  ok('没效果的是空对象', JSON.stringify(rows['火焰亲和']) === '{}');
 
-  const onlyEl = L.ladderPatch('火', '', '', '', '', '');
+  ok('takeObj 只留前 n 个', Object.keys(L.takeObj({ a: 1, b: 2, c: 3 }, 2)).join('') === 'ab');
+
+  const onlyEl = L.ladderPatch({ 火: {} }, {}, {}, '', '', '');
   ok('只有要素时算开启', onlyEl.是否开启 === true);
   ok('要素留下', Object.keys(onlyEl.要素).length === 1);
   ok('权能是空的', Object.keys(onlyEl.权能).length === 0);
 
-  const withPw = L.ladderPatch('火', '炎', '', '', '', '');
+  const withPw = L.ladderPatch({ 火: {} }, { 炎: {} }, {}, '', '', '');
   ok('有权能时要素被清空', Object.keys(withPw.要素).length === 0);
   ok('权能留下', Object.keys(withPw.权能).length === 1);
 
-  const withLw = L.ladderPatch('火', '炎', '火之法则', '', '', '');
+  const withLw = L.ladderPatch({ 火: {} }, { 炎: {} }, { 火之法则: {} }, '', '', '');
   ok('有法则时要素权能都清空',
     Object.keys(withLw.要素).length === 0 && Object.keys(withLw.权能).length === 0);
   ok('法则留下', Object.keys(withLw.法则).length === 1);
 
   ok('有神位可写 2 条法则',
-    Object.keys(L.ladderPatch('', '', 'a\nb', '神位', '', '').法则).length === 2);
+    Object.keys(L.ladderPatch({}, {}, { a: {}, b: {} }, '神位', '', '').法则).length === 2);
   ok('没神位只留 1 条',
-    Object.keys(L.ladderPatch('', '', 'a\nb', '', '', '').法则).length === 1);
+    Object.keys(L.ladderPatch({}, {}, { a: {}, b: {} }, '', '', '').法则).length === 1);
   ok('有神国不限条数',
-    Object.keys(L.ladderPatch('', '', 'a\nb\nc', '位', '神国', '描述').法则).length === 3);
-  ok('全空时算关闭', L.ladderPatch('', '', '', '', '', '').是否开启 === false);
+    Object.keys(L.ladderPatch({}, {}, { a: {}, b: {}, c: {} }, '位', '神国', '描述').法则).length === 3);
+  ok('全空时算关闭', L.ladderPatch({}, {}, {}, '', '', '').是否开启 === false);
 
   const back = L.ladderOf({ 是否开启: true, 神位: '战争之神', 神国: { 名称: '铁原', 描述: '边界' } });
   ok('读回神位', back.seat === '战争之神', back.seat);
@@ -176,7 +194,11 @@ console.log('\n=== 7. 源码接线 ===');
   ok('有经验一键填按钮', /id="fl-dev-expfill"/.test(CORE));
   ok('满级写成 MAX', /lv >= 25[\s\S]{0,40}'MAX'/.test(CORE));
   ok('写入了登神长阶', /登神长阶: ladder,/.test(CORE));
-  ok('要素框在', /id="fl-dev-el"/.test(CORE));
+  ok('要素三组', /ladderRowsHtml\('el', 3, L\.elements\)/.test(CORE));
+  ok('权能一组', /ladderRowsHtml\('pw', 1, L\.powers\)/.test(CORE));
+  ok('法则两组', /ladderRowsHtml\('lw', 2, L\.laws\)/.test(CORE));
+  ok('名称效果分成两栏', /class="fl-lad-row"[\s\S]{0,200}placeholder="名称"[\s\S]{0,200}placeholder="效果"/.test(CORE));
+  ok('读回也是按栏读', /readLadderRows\(box, 'el', 3\)/.test(CORE));
   ok('神位框在', /id="fl-dev-seat"/.test(CORE));
   ok('神国框在', /id="fl-dev-realm"/.test(CORE));
   ok('点开前先警告', /星月的属性修改器外挂，纯纯的外挂，谨慎使用，后果自负喵/.test(CORE));

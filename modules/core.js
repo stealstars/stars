@@ -367,28 +367,45 @@
     };
   }
 
-  /** 「名称」或「名称|效果」一行一项，最多 max 个 */
-  function parseLadder(text, max) {
-    const out = {};
-    const lines = String(text || '').split('\n');
-    for (const line of lines) {
-      const s = line.trim();
-      if (!s) continue;
-      const at = s.indexOf('|');
-      const name = (at < 0 ? s : s.slice(0, at)).trim();
-      const eff = at < 0 ? '' : s.slice(at + 1).trim();
-      if (!name) continue;
-      out[name] = eff ? { 效果: eff } : {};
-      if (Object.keys(out).length >= max) break;
+  /** 每项两栏：名称 + 效果。要素 3 组、权能 1 组、法则 2 组 */
+  function ladderRowsHtml(kind, count, obj) {
+    const names = Object.keys(obj || {});
+    let out = '';
+    for (let i = 0; i < count; i += 1) {
+      const name = names[i] || '';
+      const cell = name ? (obj[name] || {}) : {};
+      const eff = String(cell.效果 || '');
+      out += '<div class="fl-lad-row">'
+        + `<input id="fl-dev-${kind}-n${i}" type="text" value="${esc(name)}" placeholder="名称">`
+        + `<textarea id="fl-dev-${kind}-e${i}" rows="1" placeholder="效果">${esc(eff)}</textarea>`
+        + '</div>';
     }
     return out;
   }
 
-  /** 反过来：存档 → 一行一项的文本，填回输入框 */
-  function ladderText(obj) {
-    return Object.entries(obj || {})
-      .map(([k, v]) => (v && v.效果 ? k + '|' + v.效果 : k))
-      .join('\n');
+  /** 反过来，把界面上那几组读成 { 名称: { 效果 } } */
+  function readLadderRows(box, kind, count) {
+    const out = {};
+    if (!box) return out;
+    for (let i = 0; i < count; i += 1) {
+      const n = box.querySelector('#fl-dev-' + kind + '-n' + i);
+      const e = box.querySelector('#fl-dev-' + kind + '-e' + i);
+      const name = n ? String(n.value || '').trim() : '';
+      if (!name) continue;
+      const eff = e ? String(e.value || '').trim() : '';
+      out[name] = eff ? { 效果: eff } : {};
+    }
+    return out;
+  }
+
+  /** 只留前 n 个键 */
+  function takeObj(obj, n) {
+    const out = {};
+    for (const k of Object.keys(obj || {})) {
+      out[k] = obj[k];
+      if (Object.keys(out).length >= n) break;
+    }
+    return out;
   }
 
   /**
@@ -398,11 +415,11 @@
    */
   function ladderPatch(el, pw, lw, seat, realmName, realmDesc) {
     const n = realmName ? 99 : (seat ? 2 : 1);
-    const laws = parseLadder(lw, n);
+    const laws = takeObj(lw, n);
     const hasLaw = Object.keys(laws).length > 0;
-    const powers = hasLaw ? {} : parseLadder(pw, 1);
+    const powers = hasLaw ? {} : takeObj(pw, 1);
     const hasPower = Object.keys(powers).length > 0;
-    const elements = (hasLaw || hasPower) ? {} : parseLadder(el, 3);
+    const elements = (hasLaw || hasPower) ? {} : takeObj(el, 3);
     const hasEl = Object.keys(elements).length > 0;
     const s = String(seat || '').trim();
     const rn = String(realmName || '').trim();
@@ -502,12 +519,12 @@
       </div>
       <div class="fl-hint">登神长阶　12 级要要素，16 级要权能，20 级要法则，24 级要法则 + 神位</div>
       <div class="fl-fix">
-        <label class="fl-fix-r"><k>要素</k>
-          <textarea id="fl-dev-el" rows="2" placeholder="一行一个，最多 3 个；也可以写 名称|效果">${esc(ladderText(L.elements))}</textarea></label>
-        <label class="fl-fix-r"><k>权能</k>
-          <textarea id="fl-dev-pw" rows="1" placeholder="最多 1 个">${esc(ladderText(L.powers))}</textarea></label>
-        <label class="fl-fix-r"><k>法则</k>
-          <textarea id="fl-dev-lw" rows="1" placeholder="默认 1 条；有神位 2 条；有神国不限">${esc(ladderText(L.laws))}</textarea></label>
+        <div class="fl-fix-r"><k>要素</k>
+          <div class="fl-lad-col">${ladderRowsHtml('el', 3, L.elements)}</div></div>
+        <div class="fl-fix-r"><k>权能</k>
+          <div class="fl-lad-col">${ladderRowsHtml('pw', 1, L.powers)}</div></div>
+        <div class="fl-fix-r"><k>法则</k>
+          <div class="fl-lad-col">${ladderRowsHtml('lw', 2, L.laws)}</div></div>
         <label class="fl-fix-r"><k>神位</k>
           <input id="fl-dev-seat" type="text" value="${esc(L.seat)}" placeholder="如 战争之神"></label>
         <label class="fl-fix-r"><k>神国</k>
@@ -553,7 +570,9 @@
         return el ? el.value : '';
       };
       const ladder = ladderPatch(
-        txt('#fl-dev-el'), txt('#fl-dev-pw'), txt('#fl-dev-lw'),
+        readLadderRows(box, 'el', 3),
+        readLadderRows(box, 'pw', 1),
+        readLadderRows(box, 'lw', 2),
         txt('#fl-dev-seat'), txt('#fl-dev-realm'), txt('#fl-dev-realmd'),
       );
 
@@ -3352,6 +3371,13 @@
   .fl-fix-r textarea::placeholder { color: rgba(var(--fl-text-rgb), 0.2); }
   .fl-fix-r:has(textarea) { align-items: flex-start; }
   .fl-fix-r:has(textarea) k { padding-top: 7px; }
+
+  /* 登神长阶：一项一行，左边名称右边效果 */
+  .fl-lad-col { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .fl-lad-row { display: flex; gap: 6px; align-items: stretch; }
+  .fl-lad-row input { flex: 0 0 34%; }
+  .fl-lad-row textarea { flex: 1 1 auto; }
+  .fl-lad-row textarea::placeholder { color: rgba(var(--fl-text-rgb), 0.18); }
 
   /* 调试入口：就两个字，灰的，点开才有东西 */
   .fl-dev-link { cursor: pointer; user-select: none; letter-spacing: 1px; }
