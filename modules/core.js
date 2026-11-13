@@ -505,6 +505,177 @@
     } catch (e) { return false; }
   }
 
+  /* ------------------------------------------------ 建筑变量瘦身 */
+  /**
+   * 领地后期一个 `内部资产` 里能堆二十几座建筑，每座都带整段环境描写，
+   * 全在 stat_data 里，每轮都占上下文。这里把它压成
+   *   品质 / 标签 / 数量 / 效果{产物,产量,加成}
+   * 四个字段，描述与总占用空间挪到本地存档（变量里彻底不写）。
+   *
+   * 抽取顺序：先看 效果 里 AI 已经写好的键，抽不到才去描述正文里找。
+   * 两处都没有就**留空**，绝不编数。
+   */
+  const SLIM_KEY = 'fief-ledger-slims-v1';
+  let slims = {};
+
+  function loadSlims() {
+    try {
+      const raw = host.localStorage.getItem(SLIM_KEY);
+      const all = raw ? JSON.parse(raw) : {};
+      slims = (all && all[currentChatId()]) || {};
+    } catch (e) { slims = {}; }
+  }
+
+  function saveSlims() {
+    try {
+      const raw = host.localStorage.getItem(SLIM_KEY);
+      const all = raw ? (JSON.parse(raw) || {}) : {};
+      all[currentChatId()] = slims;
+      host.localStorage.setItem(SLIM_KEY, JSON.stringify(all));
+    } catch (e) { /* 存不下就算了，不挡精简本身 */ }
+  }
+
+  /** 产量写法归一：「每月 20 件」→「20 件/月」 */
+  function normQty(s) {
+    const t = String(s || '').trim();
+    if (!t) return '';
+    const m = t.match(/每\s*(月|日|天|周|年)\s*([\d.]+\s*[^\s\d].*)/);
+    if (m) {
+      const unit = m[1] === '天' ? '日' : m[1];
+      return m[2].trim() + '/' + unit;
+    }
+    return t;
+  }
+
+  /** 把一座建筑压成 效果{产物,产量,加成} */
+  function slimEffects(item) {
+    const lines = effectLinesOf(item);
+    const pickKey = (re) => {
+      for (const l of lines) if (re.test(String(l.k || '').trim())) return String(l.v || '').trim();
+      return '';
+    };
+    const desc = String((item && item.描述) || '');
+    const fromDesc = (re) => {
+      const m = desc.match(re);
+      return m ? String(m[1] || '').trim() : '';
+    };
+
+    const 产物 = pickKey(/^(产物|产出|生产|产品|服务|生产内容)$/)
+      || fromDesc(/(?:产物|产出|生产内容|产品)[:：]\s*([^\n。；;]+)/)
+      || fromDesc(/生产([^\n。；;，,]{1,16})/);
+
+    const 产量 = normQty(
+      pickKey(/^(产量|产能|月产|日产|年产|产出量)$/)
+      || fromDesc(/(?:产量|产能)[:：]\s*([^\n。；;]+)/)
+      || fromDesc(/每\s*(?:月|日|天|周|年)\s*(?:产出|生产|制造|出)?\s*([\d.]+\s*[^\s，。；;、]{1,8})/)
+      || fromDesc(/([\d.]+\s*(?:件|个|把|套|吨|份|瓶|张|匹|台|艘|枚|袋|桶|箱|块|斤|石|车|支|根|条)\s*(?:[/／]\s*(?:月|日|天|周|年))?)/),
+    );
+
+    const blacklist = /^(产物|产出|生产|产品|服务|生产内容|产量|产能|月产|日产|年产|产出量|加成|增益|效果|功能)$/;
+    const 加成 = pickKey(/^(加成|增益|效果|功能)$/)
+      || lines.filter((l) => l.k && !blacklist.test(String(l.k).trim()))
+        .map((l) => l.k + ': ' + l.v).filter(Boolean).join('；')
+      || fromDesc(/(?:加成|增益)[:：]\s*([^\n。；;]+)/);
+
+    const out = {};
+    if (产物) out.产物 = 产物;
+    if (产量) out.产量 = 产量;
+    if (加成) out.加成 = 加成;
+    return out;
+  }
+
+  /** 这座建筑还能不能压（已经压过的跳过） */
+  function slimmableOf(asset) {
+    const out = [];
+    for (const { key, item } of normalizeInner(asset && asset.内部资产)) {
+      const hasDesc = !!String(item.描述 || '').trim();
+      const hasSpace = !!String(item.总占用空间 || '').trim();
+      if (!hasDesc && !hasSpace) continue;
+      out.push({ key, item, hasDesc, hasSpace });
+    }
+    return out;
+  }
+
+  /** 统计整份存档能压多少座 */
+  function slimStats(stat) {
+    const assets = (stat && stat.主角 && stat.主角.资产) || {};
+    let n = 0;
+    let domain = 0;
+    for (const name of Object.keys(assets)) {
+      const a = assets[name];
+      if (!a || typeof a !== 'object') continue;
+      const typeText = String(a.类型 == null ? (parseTags(tagsText(a.标签)).类型 || '') : a.类型);
+      if (!/^领地/.test(typeText)) continue;
+      domain += 1;
+      n += slimmableOf(a).length;
+    }
+    return { n, domain };
+  }
+
+  /**
+   * 执行精简：把每座建筑的 效果 换成三键，删掉 描述 / 总占用空间。
+   * 原文按 `聊天::领地名::建筑名` 存本地，界面上还能查。
+   * 返回 { done, saved }。
+   */
+  function slimAssets(idx) {
+    const msgs = getMessages();
+    const m = msgs[idx];
+    if (!m) return { done: 0, saved: 0 };
+
+    let bag = null;
+    if (Array.isArray(m.variables)) {
+      bag = m.variables.find((x) => x && typeof x === 'object' && x.stat_data) || null;
+    } else if (m.variables && typeof m.variables === 'object' && m.variables.stat_data) {
+      bag = m.variables;
+    }
+    if (!bag || !bag.stat_data || !bag.stat_data.主角) return { done: 0, saved: 0 };
+
+    const assets = bag.stat_data.主角.资产;
+    if (!assets || typeof assets !== 'object') return { done: 0, saved: 0 };
+
+    const chat = currentChatId();
+    loadSlims();   // 先读回来，不然 saveSlims 会把别的聊天的记录覆盖掉
+    let done = 0;
+    let saved = 0;
+
+    for (const name of Object.keys(assets)) {
+      const a = assets[name];
+      if (!a || typeof a !== 'object') continue;
+      const typeText = String(a.类型 == null ? (parseTags(tagsText(a.标签)).类型 || '') : a.类型);
+      if (!/^领地/.test(typeText)) continue;
+
+      const inner = a.内部资产;
+      if (!inner || typeof inner !== 'object') continue;
+
+      for (const { key, item } of normalizeInner(inner)) {
+        const desc = String(item.描述 || '').trim();
+        const space = String(item.总占用空间 || '').trim();
+        if (!desc && !space) continue;
+
+        const storeKey = chat + '::' + name + '::' + key;
+        if (desc || space) {
+          slims[storeKey] = { 描述: desc, 总占用空间: space, at: Date.now() };
+          saved += 1;
+        }
+
+        /* 效果整对象换掉，不做合并——和 writeHeroStat 那边一个道理 */
+        item.效果 = slimEffects(item);
+
+        /* 两个长字段直接删键，zod 会给它们 prefault，不影响校验 */
+        delete item.描述;
+        delete item.总占用空间;
+        done += 1;
+      }
+    }
+
+    if (done) {
+      saveSlims();
+      const S = host.SillyTavern || window.SillyTavern;
+      if (S && typeof S.saveChat === 'function') S.saveChat();
+    }
+    return { done, saved };
+  }
+
   /** 展开前的警告。用自绘的，不用原生弹窗——
       酒馆的 iframe 有时会拦掉原生弹窗，拦掉就等于用户点了取消，面板永远打不开。 */
   function renderDevWarn(box, onOk) {
@@ -538,6 +709,7 @@
     const t = tierOfLevel(h.level);
     const cap = capsOf(h.attr, h.level);
     const L = h.ladder || {};
+    const sm = slimStats((messageState() || {}).state);
     box.innerHTML = `
       <div class="fl-fix">
         <label class="fl-fix-r"><k>等级</k>
@@ -571,7 +743,12 @@
       <div class="fl-dr-act">
         <button class="fl-btn" type="button" id="fl-dev-save">写入</button>
         <button class="fl-btn ghost" type="button" id="fl-dev-expfill">经验按等级填</button>
-      </div>`;
+      </div>
+      <div class="fl-hint" style="margin-top:16px">建筑变量瘦身　每座只留 品质 / 标签 / 数量 / 效果，描述与总占用空间从变量里删掉</div>
+      <div class="fl-hint">${sm.n
+        ? `当前 ${sm.n} 座可精简（${sm.domain} 块领地）　原文会存在本地，点建筑详情还能看`
+        : '已经没有可精简的建筑了'}</div>
+      ${sm.n ? '<div class="fl-dr-act"><button class="fl-btn" type="button" id="fl-dev-slim">精简</button></div>' : ''}`;
 
     const btn = box.querySelector('#fl-dev-save');
     if (!btn) return;
@@ -637,6 +814,18 @@
       const e2 = box.querySelector('#fl-dev-need');
       if (e1) e1.value = expTotalOf(lv);
       if (e2) e2.value = expNeedOf(lv);
+    });
+
+    /* 建筑瘦身：一次把所有领地的内部资产压成四字段 */
+    const slimBtn = box.querySelector('#fl-dev-slim');
+    if (slimBtn) slimBtn.addEventListener('click', () => {
+      const ms = messageState();
+      if (!ms) { toast('读不到状态'); return; }
+      const r = slimAssets(ms.idx);
+      if (!r.done) { toast('没有可精简的建筑'); return; }
+      toast(`精简 ${r.done} 座建筑，原文已存本地`);
+      rescan(true, '精简');
+      renderDev(box);
     });
   }
 
