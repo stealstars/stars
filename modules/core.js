@@ -560,9 +560,13 @@
       return m ? String(m[1] || '').trim() : '';
     };
 
-    const 产物 = pickKey(/^(产物|产出|生产|产品|服务|生产内容)$/)
-      || fromDesc(/(?:产物|产出|生产内容|产品)[:：]\s*([^\n。；;]+)/)
-      || fromDesc(/生产([^\n。；;，,]{1,16})/);
+    /* 「产出并入商贸流转Δ」是契约里的默认写法，不是产物名。
+       真存档里 19 座建筑有 14 座这么写，当成产物会满屏「产物：产出并入商贸流转Δ」。 */
+    const real = (v) => (v && !/并入商贸流转|^并入|^Δ$|^默认$/.test(String(v).trim()) ? v : '');
+
+    const 产物 = real(pickKey(/^(产物|产出|生产|产品|服务|生产内容)$/))
+      || real(fromDesc(/(?:产物|产出|生产内容|产品)[:：]\s*([^\n。；;]+)/))
+      || real(fromDesc(/生产([^\n。；;，,]{1,16})/));
 
     const 产量 = normQty(
       pickKey(/^(产量|产能|月产|日产|年产|产出量)$/)
@@ -1184,9 +1188,14 @@
     let digit = null;
     let lastBig = 0;
     let hit = false;
+    let sawDigit = false;
+
+    /* 「数万人」「数十人」「千余人」是概数，不是数字。
+       硬解成 10000 / 10 会凭空造出一个精确值，宁可不认。 */
+    const vague = /[数几若干余多]/.test(s) && !/[\d零〇一壹二两贰三叁四肆五伍六陆七柒八捌九玖]/.test(s);
 
     for (const ch of s) {
-      if (CN_DIGIT[ch] != null) { digit = CN_DIGIT[ch]; hit = true; continue; }
+      if (CN_DIGIT[ch] != null) { digit = CN_DIGIT[ch]; hit = true; sawDigit = true; continue; }
       const u = CN_UNIT[ch];
       if (u == null) continue;   // 别的字（人、约、军…）跳过，不影响
 
@@ -1207,6 +1216,7 @@
       section += lastBig ? digit * (lastBig / 10) : digit;
     }
 
+    if (vague && !sawDigit) return null;
     const n = total + section;
     return hit && n > 0 ? n : null;
   }
@@ -1291,8 +1301,40 @@
     const out = {};
     for (const p of parseBuildBlock(mes)) {
       out[p.名] = { 估价: p.估价, 工期: p.工期, 说明: p.说明, 类别: p.类别 };
+      /* 真实写法会把翻新后缀挂在名字后面：
+         [建设|魔导水轮锯坊(稀有级翻新扩建×2)|经济|220万Z…]
+         而内部资产的键是「魔导水轮锯坊」，按全名查永远查不到，造价和工期就丢了。 */
+      const bare = bareName(p.名);
+      if (bare && bare !== p.名 && !out[bare]) {
+        out[bare] = { 估价: p.估价, 工期: p.工期, 说明: p.说明, 类别: p.类别 };
+      }
     }
     return out;
+  }
+
+  /** 去掉名字尾巴上的括号注释：`魔导水轮锯坊(稀有级翻新扩建×2)` → `魔导水轮锯坊` */
+  function bareName(v) {
+    return String(v == null ? '' : v)
+      .replace(/[（(][^（()）]*[)）]\s*$/g, '')
+      .replace(/[（(][^（()）]*[)）]/g, '')
+      .trim();
+  }
+
+  /** 造价/工期查询：先全名，再裸名，最后按前缀找最长的那条 */
+  function buildInfoOf(buildInfo, key) {
+    const map = buildInfo || {};
+    if (map[key]) return map[key];
+    const bare = bareName(key);
+    if (bare && map[bare]) return map[bare];
+    let best = null;
+    for (const k of Object.keys(map)) {
+      const kb = bareName(k);
+      if (!kb) continue;
+      if (kb === bare || kb.indexOf(bare) === 0 || bare.indexOf(kb) === 0) {
+        if (!best || kb.length > best.len) best = { len: kb.length, v: map[k] };
+      }
+    }
+    return best ? best.v : null;
   }
 
   /* ------------------------------------------------- <fief_domain> 总览 */
@@ -2537,7 +2579,7 @@
 
     const out = collectDomains(stat).map((d) => {
       const items = normalizeInner(d.asset.内部资产).map(({ key, item }) => {
-        const info = buildInfo[key] || {};
+        const info = buildInfoOf(buildInfo, key) || {};
         const tags = parseTags(tagsText(item.标签));
         const effects = effectLinesOf(item);
         const outLine = effects.find((e) => /^产出|^产量/.test(e.k));
@@ -5131,7 +5173,10 @@
   function militaryOf(d) {
     const map = new Map();
     for (const it of d.items || []) {
-      if (!/军事|军政/.test(it.category)) continue;
+      /* 兵种才算兵。世界书里「军事」是建筑（供编制与训练，非兵员），
+         真存档的营寨也确实是 `类型:军事` + 数量1——按军事收会把营寨算成 1 个兵。
+         真实兵种写的是 `类型:兵种`，旧存档可能写「军政」。 */
+      if (!/兵种|军团|部队|舰队|军政/.test(it.category)) continue;
       map.set(it.name, {
         name: it.name,
         n: numberOf(it.quantity) || 0,

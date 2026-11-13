@@ -53,7 +53,7 @@ const militaryOf = new Function('numberOf', SRC + '\n; return militaryOf;')(numb
 console.log('=== 1. 明细删了，总览还挂着旧编制 ===');
 {
   const d = {
-    items: [{ name: 'b军团', category: '军事', quantity: '5000', quality: '精锐' }],
+    items: [{ name: 'b军团', category: '兵种', quantity: '5000', quality: '精锐' }],
     info: { 军事: [{ 编制: 'a军团', 人数: '8000' }, { 编制: 'b军团', 人数: '5000' }] },
   };
   const r = militaryOf(d);
@@ -93,13 +93,32 @@ console.log('\n=== 5. 非军事类别不混进来 ===');
 {
   const d = {
     items: [
-      { name: 'b军团', category: '军事', quantity: '5000' },
+      { name: 'b军团', category: '兵种', quantity: '5000' },
       { name: '金穗粮仓', category: '资源点', quantity: '10' },
     ],
     info: { 军事: [] },
   };
   const r = militaryOf(d);
   ok('只出军事条目', r.length === 1 && r[0].name === 'b军团', r.map((x) => x.name).join(','));
+}
+
+/* 真实存档（白鹭浅滩男爵领）：兵种是「类型:兵种」，营寨是「类型:军事」+数量1。
+   世界书写明军事「供编制与训练(非兵员)」，所以营寨不能算成 1 个兵。 */
+console.log('\n=== 5b. 兵种才算兵，军事是建筑 ===');
+{
+  const d = {
+    items: [
+      { name: '浅滩民兵巡逻队', category: '兵种', quantity: '30' },
+      { name: '白鹭浅滩常备守备队', category: '兵种', quantity: '500' },
+      { name: '白鹭浅滩常备守备军营寨', category: '军事', quantity: '1' },
+    ],
+    info: { 军事: [{ 编制: '浅滩民兵巡逻队', 人数: '30' }, { 编制: '白鹭浅滩常备守备队', 人数: '500' }] },
+  };
+  const r = militaryOf(d);
+  const tot = r.reduce((a, x) => a + (x.n || 0), 0);
+  ok('营寨不进军政', r.length === 2, r.map((x) => x.name).join(','));
+  ok('合计 530 人', tot === 530, tot);
+  ok('与总览合并', r.every((x) => x.from === '总览+内部资产'), r.map((x) => x.from).join(','));
 }
 
 /* ---------- 6. 人数写法 ---------- */
@@ -134,6 +153,12 @@ console.log('\n=== 6. 人数写法 ===');
   ok('一万五', N('一万五') === 15000, N('一万五'));
   ok('带说明也能读', N('约三千人') === 3000, N('约三千人'));
   ok('认不出给 null', N('无') === null, N('无'));
+  /* 概数不能凭空变成精确值：真实存档的人口就是「数万人」「数千人」 */
+  ok('数万人不猜', N('数万人') === null, N('数万人'));
+  ok('数千人不猜', N('数千人') === null, N('数千人'));
+  ok('数十人不猜', N('数十人') === null, N('数十人'));
+  ok('千余人不猜', N('千余人') === null, N('千余人'));
+  ok('万人还是万人', N('万人') === 10000, N('万人'));
 }
 
 console.log('\n' + (fail ? fail + ' 项失败  ' : '全部通过 ✔  ') + (pass + fail) + ' 项');

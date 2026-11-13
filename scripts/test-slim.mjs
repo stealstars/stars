@@ -101,6 +101,24 @@ console.log('\n=== 3. 从 描述 里抽 ===');
   ok('空对象给空对象', Object.keys(c).length === 0, JSON.stringify(c));
 }
 
+/* ---------------- 2b. 契约里的默认写法不算产物 ---------------- */
+console.log('\n=== 2b. 「产出并入商贸流转Δ」不是产物名 ===');
+{
+  /* 真实存档（白鹭浅滩男爵领）：19 座里 14 座这么写 */
+  const a = M.slimEffects({ 效果: { 产出: '产出并入商贸流转Δ', 秘银高速排锯: '大幅提升造船板材加工效率' } });
+  ok('默认写法不当产物', a.产物 === undefined, JSON.stringify(a));
+  ok('特色键还是加成', a.加成 === '秘银高速排锯: 大幅提升造船板材加工效率', a.加成);
+
+  const b = M.slimEffects({ 效果: { 产出: '产出并入商贸流转Δ' } });
+  ok('只有默认写法就是空', Object.keys(b).length === 0, JSON.stringify(b));
+
+  const c = M.slimEffects({ 效果: { 产物: '未知' } });
+  ok('「未知」是有效值，保留', c.产物 === '未知', JSON.stringify(c));
+
+  const d = M.slimEffects({ 效果: { 产出: '铁器' } });
+  ok('真产物照旧', d.产物 === '铁器', JSON.stringify(d));
+}
+
 /* ---------------- 4. 该压哪些 ---------------- */
 console.log('\n=== 4. 该压哪些 ===');
 {
