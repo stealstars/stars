@@ -47,12 +47,11 @@ const SRC = [
   cut('  function collectDomains(stat)'),
   cut('  function relationOf(d)'),
   cut('  function orderDomains(list)'),
-  cut('  function markJurisdiction(tree)'),
 ].join('\n');
 
 /* prefs / getCtx 是运行时的东西，这里给可控的替身 */
 const P = new Function('getCtx', 'prefs', SRC + '\n; return { isDomainAsset, isContainerAsset, ownershipOf,'
-  + ' myNames, collectDomains, relationOf, orderDomains, nestedDomainsOf, authorityMapOf, markJurisdiction };');
+  + ' myNames, collectDomains, relationOf, orderDomains, nestedDomainsOf, authorityMapOf };');
 
 const make = (opts = {}) => {
   const prefs = { myNames: opts.myNames || '' };
@@ -207,8 +206,8 @@ console.log('\n=== 5. 排成树 ===');
   ok('环不死循环且都留着', oc.length === 2, oc.length);
 }
 
-/* ---------------- 5b. 辖区：按层级，不按拥有者 ---------------- */
-console.log('\n=== 5b. 辖区（行省/大国视角）===');
+/* ---------------- 5b. 归属只看自己，绝不按层级继承 ---------------- */
+console.log('\n=== 5b. 归属不继承（每块地自己说了算）===');
 {
   const stat = {
     主角: {
@@ -217,23 +216,66 @@ console.log('\n=== 5b. 辖区（行省/大国视角）===');
         白鸦郡: { 类型: '领地', 标签: ['拥有者:千星', '领地规模:大型城市', '上级资产:西境行省'] },
         灰岩县: { 类型: '领地', 标签: ['拥有者:灰岩侯', '领地规模:中型城镇', '上级资产:白鸦郡', '协议类型:授封'] },
         黑石村: { 类型: '领地', 标签: ['拥有者:黑石长老', '领地规模:村庄', '上级资产:灰岩县'] },
+        /* 帝国在我行省里塞的飞地：上级是我的，产权是帝国的 */
+        御苑飞地: { 类型: '领地', 标签: ['拥有者:奥古斯提姆帝国', '领地规模:中型城镇', '上级资产:西境行省'] },
         东境行省: { 类型: '领地', 标签: ['拥有者:别家公爵', '领地规模:小国或帝国行省'] },
       },
     },
   };
   const tree = M.orderDomains(M.collectDomains(stat));
   for (const d of tree) if (!d.relation) d.relation = M.relationOf(d);
-  M.markJurisdiction(tree);
   const by = {};
   for (const d of tree) by[d.name] = d;
 
-  ok('行省是我的', by['西境行省'].jurisdiction === true);
-  ok('郡是我的', by['白鸦郡'].jurisdiction === true);
-  ok('封臣的县也算我辖区', by['灰岩县'].jurisdiction === true, by['灰岩县'].jurisdiction);
-  ok('孙辈的村也算', by['黑石村'].jurisdiction === true, by['黑石村'].jurisdiction);
-  ok('别人的行省不算', by['东境行省'].jurisdiction === false, by['东境行省'].jurisdiction);
-  ok('封臣县仍标授封', by['灰岩县'].relation === '授封', by['灰岩县'].relation);
-  ok('层级排对：行省→郡→县→村', by['黑石村'].depth === 3, by['黑石村'].depth);
+  ok('行省是我的', by['西境行省'].own === 'mine');
+  ok('郡是我的', by['白鸦郡'].own === 'mine');
+  ok('封臣的县是别人的', by['灰岩县'].own === 'other', by['灰岩县'].own);
+  ok('孙辈的村也是别人的', by['黑石村'].own === 'other', by['黑石村'].own);
+  ok('飞地不因上级是我的就被吞', by['御苑飞地'].own === 'other', by['御苑飞地'].own);
+  ok('飞地不是直辖', by['御苑飞地'].relation !== '直辖', by['御苑飞地'].relation);
+  ok('封臣县标授封', by['灰岩县'].relation === '授封', by['灰岩县'].relation);
+  ok('层级照样排对：行省→郡→县→村', by['黑石村'].depth === 3, by['黑石村'].depth);
+  ok('不再有 jurisdiction 字段', by['灰岩县'].jurisdiction === undefined, by['灰岩县'].jurisdiction);
+  ok('源码里没有 markJurisdiction', !/markJurisdiction/.test(CORE));
+}
+
+/* ---------------- 5b2. 收个比自己档位高的人当封臣 ----------------
+   世界书原来写「授封(6档+)」，等于不到 6 档不许有封臣；玩家要的是
+   低档也能收高档的人。脚本这边从来不看档位，这里把这条锁住。 */
+console.log('\n=== 5b2. 封臣档位可以高于封君 ===');
+{
+  const stat = {
+    主角: {
+      资产: {
+        白鹭浅滩男爵领: { 类型: '领地', 标签: ['拥有者:千星', '领地规模:村庄'] },
+        高门城: {
+          类型: '领地',
+          标签: ['拥有者:某公爵', '领地规模:超级城市', '上级资产:白鹭浅滩男爵领', '协议类型:授封'],
+        },
+      },
+    },
+  };
+  const tree = M.orderDomains(M.collectDomains(stat));
+  for (const d of tree) if (!d.relation) d.relation = M.relationOf(d);
+  const by = {};
+  for (const d of tree) by[d.name] = d;
+
+  ok('高档受封者照常读出来', !!by['高门城']);
+  ok('关系是授封', by['高门城'].relation === '授封', by['高门城'].relation);
+  ok('排在封君下面', by['高门城'].depth === 1, by['高门城'].depth);
+  ok('产权归受封者', by['高门城'].own === 'other', by['高门城'].own);
+  ok('封君没被挤掉', !!by['白鹭浅滩男爵领'] && by['白鹭浅滩男爵领'].relation === '直辖');
+
+  /* 世界书那一条也得跟上，否则 AI 不会写出这种授封 */
+  let bookText = '';
+  try {
+    const { loadExtBook } = await import('./ext-book.mjs');
+    bookText = loadExtBook().entries.map((e) => String(e.content || '')).join('\n');
+  } catch (e) { /* 没有世界书就跳过这两条 */ }
+  if (bookText) {
+    ok('世界书不再卡 6 档', !/授封\(6档\+\)/.test(bookText));
+    ok('世界书写明受封者可高于封君', /受封者规模档可高于/.test(bookText));
+  }
 }
 
 /* ---------------- 5c. 大国开局顶栏不许被下级淹掉 ---------------- */

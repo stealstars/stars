@@ -2786,23 +2786,15 @@
   }
 
   /**
-   * 辖区：挂在谁的树里，就归谁管——不看 [拥有者:]，只看层级。
+   * 层级只决定「谁在谁下面」，不决定「谁归谁管」。
    *
-   * 行省/大国开局，下面的郡县多半是封臣或地方贵族持有的，`[拥有者:]` 写着他们的名字，
-   * 但那是我要管的下级土地。要是按拥有者筛，整棵树会被压暗一大半，
-   * 看起来像「这些都不是我的」——这正是原来那个毛病。
-   * 只有根上就是别人的（外来），才真的跟我没关系。
-   *
-   * tree 是父在前子在后（orderDomains 保证），顺着推一遍就够。
+   * 曾经在这里按父级继承过一次辖区，是错的：
+   *   ① 封臣的封臣（孙辈）会被一路吞进我的辖区，其实那是封臣管的
+   *   ② 帝国在我行省里塞一块皇室直辖飞地，拥有者写着帝国，也会被吞进来
+   *   ③ 一处 `[上级资产:]` 写错，整棵子树跟着认错主
+   * 所以归属一律由每块地自己的 `[拥有者:]` / `[治权凭证]` / `[协议类型:]` 决定，
+   * 不往上找爸爸。树只用来排显示顺序和缩进。
    */
-  function markJurisdiction(tree) {
-    const byName = new Map(tree.map((d) => [d.name, d]));
-    for (const d of tree) {
-      const p = d.parentName ? byName.get(d.parentName) : null;
-      d.jurisdiction = p ? !!p.jurisdiction : (d.own !== 'other');
-    }
-    return tree;
-  }
 
   function buildLedger() {
     const stat = resolveState();
@@ -2903,7 +2895,6 @@
       }
     }
     const tree = orderDomains(out);
-    markJurisdiction(tree);
 
     // 整份状态是从快照恢复的：建筑要标出来，别让人以为是这一轮刚读到的
     const fromSnapshot = lastStateSource === '存档快照';
@@ -5600,8 +5591,8 @@
         const cls = ['fl-domchip'];
         if (i === domIdx) cls.push('on');
         if (x.relation === '容器') cls.push('box');
-        // 只压暗真正跟我无关的：树里我的下级土地，哪怕拥有者是封臣也正常显示
-        if (x.jurisdiction === false) cls.push('other');
+        // 只压暗真正不是我的：授封、外来。代管（拥有者不是我但治权在我）不算
+        if (x.own === 'other') cls.push('other');
         const rel = x.relation && x.relation !== '直辖' ? `<em>${esc(x.relation)}</em>` : '';
         return `<span class="${cls.join(' ')}" data-i="${i}">${esc(x.name)}${rel}</span>`;
       }).join('');
