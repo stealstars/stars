@@ -3134,6 +3134,24 @@
   }
   .fl-domchip.on em { color: rgba(var(--fl-accent-rgb),0.72); }
   .fl-dombr { text-decoration: none; margin-right: 4px; color: var(--fl-line2); }
+  /* 面包屑：当前在哪条链上。顶栏只放顶层领地，下级靠它往回走 */
+  .fl-crumb {
+    display: flex; align-items: center; gap: 4px; margin-left: 8px; flex-wrap: wrap;
+    font-size: calc(11.5px * var(--fl-fs, 1)); color: var(--fl-dimmer);
+  }
+  .fl-crumb b { cursor: pointer; font-weight: 400; letter-spacing: .6px; }
+  .fl-crumb b:hover { color: var(--fl-text); }
+  .fl-crumb b.on { color: var(--fl-accent); }
+  .fl-crumb s { text-decoration: none; color: var(--fl-line2); }
+  /* 属地行可点：钻下去 / 退回上级 */
+  .fl-subrow { cursor: pointer; transition: background .15s ease; }
+  .fl-subrow:hover { background: rgba(var(--fl-accent-rgb), 0.05); }
+  .fl-subup {
+    font-size: calc(11px * var(--fl-fs, 1)); color: var(--fl-dimmer);
+    padding: 5px 2px 8px; border-bottom: 1px dashed var(--fl-line); margin-bottom: 4px;
+  }
+  .fl-subup:hover { color: var(--fl-accent); }
+  .fl-more { color: var(--fl-line2); margin-left: 3px; }
   .fl-top-r { margin-left: auto; display: flex; align-items: center; gap: 10px; }
   .fl-btn {
     cursor: pointer; border: 1px solid var(--fl-line2); background: rgba(var(--fl-accent-rgb),0.07);
@@ -5547,27 +5565,52 @@
   }
 
   /* ------------------------------------------------------------ 头部 */
-  /** 顶栏的属地树：缩进表示层级，右侧小字标关系，别人的地盘压暗 */
+  /**
+   * 顶栏：只放顶层领地，外加「当前在哪条链上」的面包屑。
+   *
+   * 行省/大国开局动辄几十块下级领地，全摊在页头就是一排框框，谁也点不准。
+   * 下级不在这里列，走「属地」一节点进去，面包屑负责往回走。
+   */
   function renderTop(d) {
     const list = data.domains || [];
-    domselEl.innerHTML = list.length > 1
-      ? list.map((x, i) => {
-        const depth = Math.min(x.depth || 0, 3);
+    if (!list.length) { domselEl.innerHTML = ''; return; }
+
+    const roots = list.filter((x) => !x.parentName);
+    // 从根到当前这条链
+    const chain = [];
+    let cur = d;
+    for (let guard = 0; cur && guard < 12; guard += 1) {
+      chain.unshift(cur);
+      cur = cur.parentName ? list.find((x) => x.name === cur.parentName) : null;
+    }
+
+    let html = '';
+    if (roots.length > 1) {
+      html += roots.map((x) => {
+        const i = list.indexOf(x);
         const cls = ['fl-domchip'];
         if (i === domIdx) cls.push('on');
         if (x.relation === '容器') cls.push('box');
         // 只压暗真正跟我无关的：树里我的下级土地，哪怕拥有者是封臣也正常显示
         if (x.jurisdiction === false) cls.push('other');
         const rel = x.relation && x.relation !== '直辖' ? `<em>${esc(x.relation)}</em>` : '';
-        const br = depth ? '<s class="fl-dombr">└</s>' : '';
-        return `<span class="${cls.join(' ')}" data-i="${i}" style="margin-left:${depth * 11}px">${br}${esc(x.name)}${rel}</span>`;
-      }).join('')
-      : '';
-    domselEl.querySelectorAll('.fl-domchip').forEach((c) => {
+        return `<span class="${cls.join(' ')}" data-i="${i}">${esc(x.name)}${rel}</span>`;
+      }).join('');
+    }
+
+    if (chain.length > 1) {
+      html += `<span class="fl-crumb">${chain.map((x, i) => {
+        const last = i === chain.length - 1;
+        return `${i ? '<s>›</s>' : ''}<b data-i="${list.indexOf(x)}"${last ? ' class="on"' : ''}>${esc(x.name)}</b>`;
+      }).join('')}</span>`;
+    }
+
+    domselEl.innerHTML = html;
+    domselEl.querySelectorAll('[data-i]').forEach((c) => {
       c.addEventListener('click', () => {
         domIdx = Number(c.dataset.i) || 0;
-        const cur = data.domains[domIdx];
-        domName = cur ? cur.name : '';
+        const cur2 = data.domains[domIdx];
+        domName = cur2 ? cur2.name : '';
         closeDrawer();
         render();
       });
@@ -5830,10 +5873,16 @@
        并表的下级按契约把金库写 0Z，定额并进上级 [收入|下辖并表]，
        所以这里只如实显示 0，不替它加总。 */
     const kids = (data.domains || []).filter((x) => x !== d && x.parentName === d.name);
-    if (kids.length) {
+    if (kids.length || d.parentName) {
       const cnt = {};
       for (const k of kids) cnt[k.relation] = (cnt[k.relation] || 0) + 1;
-      const sub = Object.keys(cnt).map((k) => k + ' ' + cnt[k]).join(' · ');
+      const sub = kids.length
+        ? Object.keys(cnt).map((k) => k + ' ' + cnt[k]).join(' · ')
+        : '没有下级';
+      /* 行省/大国开局，下级土地得能点进去——顶栏只放顶层，往下走靠这里 */
+      const upRow = d.parentName
+        ? `<div class="fl-subrow fl-subup" data-dom="${esc(d.parentName)}">↑ ${esc(d.parentName)}</div>`
+        : '';
       const rows = kids.map((k) => {
         const g2 = k.gov || {};
         const gi = k.info || {};
@@ -5847,11 +5896,13 @@
         /* 拥有者不是我的，就把名字摆出来——地是我管，产权是他的 */
         const owner = String((k.meta && k.meta.拥有者) || '');
         const ownerMark = owner && k.own !== 'mine' ? '　拥有者 ' + esc(owner) : '';
-        return `<div class="fl-kv" style="display:block;padding:9px 0">
+        const more = (data.domains || []).some((x) => x.parentName === k.name)
+          ? '<span class="fl-more">›</span>' : '';
+        return `<div class="fl-kv fl-subrow" data-dom="${esc(k.name)}" style="display:block;padding:9px 0">
           <div style="display:flex;align-items:baseline;gap:9px">
             <span style="flex:1;color:var(--fl-bright);font-size:calc(12.5px * var(--fl-fs,1));letter-spacing:.4px">${esc(k.name)}</span>
             <span class="fl-tag">${esc(tierName)}</span>
-            <span style="color:var(--fl-dimmer);font-size:calc(10.5px * var(--fl-fs,1))">${esc(k.relation || '')}</span>
+            <span style="color:var(--fl-dimmer);font-size:calc(10.5px * var(--fl-fs,1))">${esc(k.relation || '')}${more}</span>
           </div>
           <div style="margin-top:5px;font-size:calc(11px * var(--fl-fs,1));color:rgba(var(--fl-text-rgb),.6)">
             治安 ${esc(String(g2.治安 || gi.治安 || '—'))}　民心 ${esc(String(g2.民心 || gi.民心 || '—'))}
@@ -5859,7 +5910,7 @@
           </div>
         </div>`;
       }).join('');
-      html += section('属 地', sub, `<div class="fl-box"><div class="fl-kvs">${rows}</div></div>`);
+      html += section('属 地', sub, `<div class="fl-box"><div class="fl-kvs">${upRow}${rows}</div></div>`);
     } else if (d.own === 'unmarked') {
       html += section('属 地', '未标归属', `<div class="fl-box"><div class="fl-notice">
         <div class="fl-notice-r"><i></i><span>这块领地的标签里没有 <b>[拥有者:]</b>，所以没法判断是不是你的。
@@ -6932,6 +6983,18 @@
     viewEl.querySelectorAll('.fl-fchip').forEach((n) => {
       n.addEventListener('click', () => {
         catFilter = n.dataset.f;
+        render();
+      });
+    });
+    /* 属地行：点进去 / 点上级回来。顶栏只放顶层，往下走全靠这里 */
+    viewEl.querySelectorAll('.fl-subrow[data-dom]').forEach((n) => {
+      n.addEventListener('click', () => {
+        const to = String(n.dataset.dom || '');
+        const at = ((data && data.domains) || []).findIndex((x) => x.name === to);
+        if (at < 0) return;
+        domIdx = at;
+        domName = to;
+        closeDrawer();
         render();
       });
     });

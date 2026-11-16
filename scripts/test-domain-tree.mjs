@@ -235,6 +235,46 @@ console.log('\n=== 5b. 辖区（行省/大国视角）===');
   ok('层级排对：行省→郡→县→村', by['黑石村'].depth === 3, by['黑石村'].depth);
 }
 
+/* ---------------- 5c. 大国开局顶栏不许被下级淹掉 ---------------- */
+console.log('\n=== 5c. 几十块领地时顶栏只放顶层 ===');
+{
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const factory = new Function('domselEl', 'data', 'domIdx', 'closeDrawer', 'render', 'esc',
+    cut('  function renderTop(d)') + '\n; return renderTop;');
+
+  /* 1 个自己的行省 + 1 个别人的行省 + 38 个下级 */
+  const domains = [
+    { name: '西境行省', parentName: '', relation: '直辖', own: 'mine', jurisdiction: true },
+    { name: '东境行省', parentName: '', relation: '外来', own: 'other', jurisdiction: false },
+  ];
+  domains.push({ name: '白鸦郡', parentName: '西境行省', relation: '下级', own: 'mine', jurisdiction: true });
+  for (let i = 1; i <= 37; i += 1) {
+    domains.push({
+      name: '县' + i,
+      parentName: i <= 3 ? '西境行省' : '白鸦郡',
+      relation: '授封', own: 'other', jurisdiction: true,
+    });
+  }
+  const data = { domains };
+  const at = domains.findIndex((x) => x.name === '县20');
+  const box = { innerHTML: '', querySelectorAll: () => [] };
+  const renderTop = factory(box, data, at, () => {}, () => {}, esc);
+  renderTop(domains[at]);
+  const html = box.innerHTML;
+
+  const chips = (html.match(/fl-domchip/g) || []).length;
+  ok('40 块领地只出 2 个顶层 chip', chips === 2, chips);
+  ok('当前这块在面包屑里', /fl-crumb/.test(html) && html.indexOf('县20') >= 0);
+  ok('面包屑带上了上级', html.indexOf('西境行省') >= 0 && html.indexOf('白鸦郡') >= 0);
+  ok('下级不单独占 chip', !/fl-domchip[^>]*>县/.test(html));
+
+  /* 只有一块领地时顶栏空着，跟以前一样 */
+  const one = { domains: [{ name: '白鹭浅滩男爵领', parentName: '', relation: '直辖', own: 'mine' }] };
+  const box2 = { innerHTML: 'x', querySelectorAll: () => [] };
+  factory(box2, one, 0, () => {}, () => {}, esc)(one.domains[0]);
+  ok('单块领地不渲染顶栏', box2.innerHTML === '', box2.innerHTML);
+}
+
 /* ---------------- 6. collectDomains 全流程 ---------------- */
 console.log('\n=== 6. 一次收全 ===');
 {
@@ -295,7 +335,9 @@ console.log('\n=== 8. 接进渲染了吗 ===');
   ok('建筑列表滤掉领地', /\.filter\(\(\{ item \}\) => !isDomainAsset\(item\)\)/.test(CORE));
   ok('数据里带上层级字段', /parentName: d\.parentName \|\| ''/.test(CORE));
   ok('重读后锚回原来那块', /keepDomainFocus\(\)/.test(CORE));
-  ok('顶栏用 depth 缩进', /margin-left:\$\{depth \* 11\}px/.test(CORE));
+  ok('顶栏只放顶层领地', /const roots = list\.filter\(\(x\) => !x\.parentName\)/.test(CORE));
+  ok('有面包屑', /fl-crumb/.test(CORE));
+  ok('属地行可点', /\.fl-subrow\[data-dom\]/.test(CORE));
   ok('总览有属地一节', /section\('属 地'/.test(CORE));
   ok('设置里有我的名号', /id="fl-myname"/.test(CORE));
   ok('名号存进偏好', /myNames: typeof p\.myNames === 'string'/.test(CORE));
