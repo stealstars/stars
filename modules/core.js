@@ -1098,7 +1098,9 @@
     const tags = parseTags(tagsText(asset.标签));
     const typeText = String(asset.类型 == null ? (tags.类型 || '') : asset.类型);
     if (/^领地/.test(typeText)) return true;
-    return !!(tags.领地规模 || tags.规模);
+    /* 只认世界书定的 `[领地规模:]`。别顺手加 `[规模:]` 之类的兜底——
+       世界书里没有那个标签，加了只会让某天写着「规模」的建筑变成一块领地。 */
+    return !!tags.领地规模;
   }
 
   /** 写在上级 `内部资产` 里的附属领地（世界书：直接移动，不是复制） */
@@ -2560,8 +2562,11 @@
     return out;
   }
 
-  /** 直辖 / 代管 / 下级 / 附属 / 授封 / 外来 / 容器 */
+  /** 直辖 / 代管 / 下级 / 附属 / 授封 / 外来 / 容器 / 仅区块 */
   function relationOf(d) {
+    /* 只在 <fief_domain> 区块里出现过、资产里没有这块地的：
+       它不是一个真实存在的资产，别跟真领地混在一起。 */
+    if (d.fromBlock) return '仅区块';
     if (d.container) return '容器';
     if (d.own === 'governed') return '代管';
     if (d.nested) return d.own === 'other' ? '授封' : '附属';
@@ -2590,7 +2595,7 @@
         roots.push(d);
       }
     }
-    const RANK = { 直辖: 0, 代管: 1, 容器: 2, 下级: 3, 附属: 4, 授封: 5, 外来: 6 };
+    const RANK = { 直辖: 0, 代管: 1, 容器: 2, 下级: 3, 附属: 4, 授封: 5, 外来: 6, 仅区块: 7 };
     const rankOf = (d) => (RANK[d.relation] == null ? 9 : RANK[d.relation]);
     const sortKids = (arr) => arr.sort((a, b) => {
       const r = rankOf(a) - rankOf(b);
@@ -5575,7 +5580,11 @@
     const list = data.domains || [];
     if (!list.length) { domselEl.innerHTML = ''; return; }
 
-    const roots = list.filter((x) => !x.parentName);
+    /* 顶层节点只算「资产里真实存在的」。只在区块里出现过的（仅区块）不占顶栏——
+       那些多半是历史消息里写过、变量里其实没有的地名，露出来就是一排框框。
+       整个存档都只有区块、没有任何资产时，再退回全列，免得面板空着。 */
+    const realRoots = list.filter((x) => !x.parentName && x.relation !== '仅区块');
+    const roots = realRoots.length ? realRoots : list.filter((x) => !x.parentName);
     // 从根到当前这条链
     const chain = [];
     let cur = d;
@@ -7279,6 +7288,11 @@
     const orph = tree.filter((d) => d.orphanParent);
     html += row('上级对不上号', orph.length
       ? warn(orph.map((d) => esc(d.name) + ' → ' + esc(d.orphanParent)).join('；'))
+      : yes('没有'));
+    /* 只在区块里出现、资产里没有的：不占顶栏，但得让人知道有这回事 */
+    const onlyBlock = tree.filter((d) => d.relation === '仅区块');
+    html += row('仅区块的领地', onlyBlock.length
+      ? warn(onlyBlock.map((d) => esc(d.name)).join('、') + '（资产里没有，没进顶栏）')
       : yes('没有'));
 
     html += '<div class="fl-diag-h">区 块 与 账 本</div>';

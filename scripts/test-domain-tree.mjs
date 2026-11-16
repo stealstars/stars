@@ -69,7 +69,8 @@ console.log('=== 1. 什么算领地 ===');
   ok('类型:领地(前缀也算)', M.isDomainAsset({ 类型: '领地·行省' }));
   ok('类型:王国 + 领地规模标签', M.isDomainAsset({ 类型: '王国', 标签: ['领地规模:大国'] }));
   ok('类型:位面 + 领地规模标签', M.isDomainAsset({ 类型: '位面', 标签: ['领地规模:小国或帝国行省'] }));
-  ok('只有规模标签也认', M.isDomainAsset({ 标签: ['规模:中型城镇'] }));
+  ok('只有 [规模:] 不算（世界书没这个标签）', !M.isDomainAsset({ 标签: ['规模:中型城镇'] }));
+  ok('建筑写了「规模」也不变成领地', !M.isDomainAsset({ 类型: '经济', 标签: ['规模:小型', '类型:经济'] }));
   ok('普通建筑不算', !M.isDomainAsset({ 类型: '经济', 标签: ['类型:经济'] }));
   ok('资源点不算', !M.isDomainAsset({ 类型: '资源点', 标签: ['类型:资源点'] }));
   ok('空值不炸', !M.isDomainAsset(null) && !M.isDomainAsset(undefined));
@@ -275,6 +276,43 @@ console.log('\n=== 5c. 几十块领地时顶栏只放顶层 ===');
   ok('单块领地不渲染顶栏', box2.innerHTML === '', box2.innerHTML);
 }
 
+/* ---------------- 5d. 只在区块里出现的地名不占顶栏 ---------------- */
+console.log('\n=== 5d. 仅区块的领地 ===');
+{
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const factory = new Function('domselEl', 'data', 'domIdx', 'closeDrawer', 'render', 'esc',
+    cut('  function renderTop(d)') + '\n; return renderTop;');
+
+  /* 资产里只有一块行省；区块里另外记过 3 个郡（变量里其实没有） */
+  const domains = [
+    { name: '西境行省', parentName: '', relation: '直辖', own: 'mine' },
+    { name: '旧郡甲', parentName: '', relation: '仅区块', fromBlock: true },
+    { name: '旧郡乙', parentName: '', relation: '仅区块', fromBlock: true },
+    { name: '旧郡丙', parentName: '', relation: '仅区块', fromBlock: true },
+  ];
+  const data = { domains };
+  const box = { innerHTML: '', querySelectorAll: () => [] };
+  factory(box, data, 0, () => {}, () => {}, esc)(domains[0]);
+  ok('仅区块的不进顶栏', (box.innerHTML.match(/fl-domchip/g) || []).length === 0, box.innerHTML);
+  ok('真领地照常', box.innerHTML.indexOf('西境行省') >= 0 || box.innerHTML === '');
+
+  /* 整份存档只有区块、没有资产：退回全列，别让面板空着 */
+  const onlyBlocks = {
+    domains: [
+      { name: '旧郡甲', parentName: '', relation: '仅区块', fromBlock: true },
+      { name: '旧郡乙', parentName: '', relation: '仅区块', fromBlock: true },
+    ],
+  };
+  const box2 = { innerHTML: '', querySelectorAll: () => [] };
+  factory(box2, onlyBlocks, 0, () => {}, () => {}, esc)(onlyBlocks.domains[0]);
+  ok('只有区块时退回全列', (box2.innerHTML.match(/fl-domchip/g) || []).length === 2,
+    (box2.innerHTML.match(/fl-domchip/g) || []).length);
+
+  /* 关系归类 */
+  ok('区块补出来的标「仅区块」', M.relationOf({ fromBlock: true, own: 'unmarked' }) === '仅区块');
+  ok('资产里的不会被误标', M.relationOf({ own: 'mine', parentName: '' }) === '直辖');
+}
+
 /* ---------------- 6. collectDomains 全流程 ---------------- */
 console.log('\n=== 6. 一次收全 ===');
 {
@@ -335,7 +373,7 @@ console.log('\n=== 8. 接进渲染了吗 ===');
   ok('建筑列表滤掉领地', /\.filter\(\(\{ item \}\) => !isDomainAsset\(item\)\)/.test(CORE));
   ok('数据里带上层级字段', /parentName: d\.parentName \|\| ''/.test(CORE));
   ok('重读后锚回原来那块', /keepDomainFocus\(\)/.test(CORE));
-  ok('顶栏只放顶层领地', /const roots = list\.filter\(\(x\) => !x\.parentName\)/.test(CORE));
+  ok('顶栏只放顶层领地', /const realRoots = list\.filter\(\(x\) => !x\.parentName && x\.relation !== '仅区块'\)/.test(CORE));
   ok('有面包屑', /fl-crumb/.test(CORE));
   ok('属地行可点', /\.fl-subrow\[data-dom\]/.test(CORE));
   ok('总览有属地一节', /section\('属 地'/.test(CORE));
