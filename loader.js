@@ -22,7 +22,7 @@
    *   填 '0.9.68'   → 锁死那版，线上再发新版也不跟
    * 每版发布会打一个 git tag，所以历史版本永远可取、内容永不改变。
    */
-  const TARGET_VERSION = '';
+  const TARGET_VERSION = '0.9.90';
 
   /* 锁版本时走 tag 路径，没锁就走分支 */
   const REF = TARGET_VERSION ? ('v' + TARGET_VERSION) : BRANCH;
@@ -46,7 +46,7 @@
    * 但 loader.js 自己的改动拉不到。所以启动时先问线上有没有更新版，有就装来跑。
    * 不 +1 的话，线上那份旧的判断「不比我的新」，改了等于没改。
    */
-  const LOADER_VERSION = '5';
+  const LOADER_VERSION = '6';
 
   const state = {
     disposed: false,
