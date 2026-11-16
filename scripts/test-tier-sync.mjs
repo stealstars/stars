@@ -9,6 +9,7 @@
  * 这个测试直接读世界书，逐项比对，脱节就红。
  */
 import fs from 'node:fs';
+import { loadExtBook } from './ext-book.mjs';
 
 let pass = 0, fail = 0;
 function ok(name, cond, extra) {
@@ -17,10 +18,14 @@ function ok(name, cond, extra) {
 }
 
 /* ---------- 1. 从世界书解析七档表 ---------- */
-/* 七档表在「领地扩展」世界书里，不在命定本体卡里 */
-const EXT = JSON.parse(fs.readFileSync(
-  'D:/223/领地开始/领地扩展-7合1-免递归-终极版-v9-含可选治世经验.json', 'utf8'));
-const entries = Array.isArray(EXT.entries) ? EXT.entries : Object.values(EXT.entries);
+/* 七档表在「领地扩展」世界书里，不在命定本体卡里。
+   文件名带不带 -1 后缀看导出次数，交给 ext-book.mjs 去找。 */
+const EXT_BOOK = loadExtBook();
+if (!EXT_BOOK) {
+  console.log('跳过：没找到领地扩展世界书（D:/223/领地开始/领地扩展*.json）');
+  process.exit(0);
+}
+const entries = EXT_BOOK.entries;
 
 let tableText = '';
 for (const e of entries) {

@@ -124,7 +124,7 @@ console.log('\n=== 7. 空数据不炸 ===');
 
 console.log('\n=== 8. 源码里确实接上了 ===');
 {
-  ok('有 applyFixes 调用', /data = buildLedger\(\);\n\s*applyFixes\(data\);/.test(CORE));
+  ok('有 applyFixes 调用', /data = buildLedger\(\);[\s\S]{0,160}?applyFixes\(data\);/.test(CORE));
   ok('抽屉里有修正区', /id="fl-fix-name"/.test(CORE) && /id="fl-fix-qty"/.test(CORE));
   ok('有保存和撤销按钮', /id="fl-fix-save"/.test(CORE) && /id="fl-fix-clear"/.test(CORE));
   ok('按聊天隔离', /FIX_KEY \+ ':' \+ currentChatId\(\)/.test(CORE));

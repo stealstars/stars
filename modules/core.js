@@ -205,6 +205,8 @@
       contrast: !!p.contrast,
       // 明暗：底色深浅，和主色无关
       mode: p.mode === 'light' ? 'light' : 'dark',
+      // 我的名号：用来认「这块领地是不是我的」（匹配 [拥有者:]），空则退回人设名
+      myNames: typeof p.myNames === 'string' ? p.myNames : '',
     };
   }
 
@@ -592,6 +594,9 @@
   function slimmableOf(asset) {
     const out = [];
     for (const { key, item } of normalizeInner(asset && asset.内部资产)) {
+      /* 附属领地也写在内部资产里，但它归属地，不是建筑——
+         压掉它的描述等于把一块领地写成空壳 */
+      if (isDomainAsset(item)) continue;
       const hasDesc = !!String(item.描述 || '').trim();
       const hasSpace = !!String(item.总占用空间 || '').trim();
       if (!hasDesc && !hasSpace) continue;
@@ -1078,6 +1083,67 @@
       // 描述正文：外交页要从这里扫 [邻邦] 行，之前没带出来
       desc,
     };
+  }
+
+  /* ------------------------------------------- 属地归属与层级 */
+  /**
+   * 这块资产算不算「领地」。
+   *
+   * 只认 `类型:领地` 是不够的：国家/位面开局，AI 会写 `类型:王国`、`类型:帝国行省`、
+   * `类型:位面`，面板里就一块都看不到。世界书把 `[领地规模:…]` 定为必填标签，
+   * 拿它兜底比列一张类型名单可靠——名单总会漏，契约不会。
+   */
+  function isDomainAsset(asset) {
+    if (!asset || typeof asset !== 'object') return false;
+    const tags = parseTags(tagsText(asset.标签));
+    const typeText = String(asset.类型 == null ? (tags.类型 || '') : asset.类型);
+    if (/^领地/.test(typeText)) return true;
+    return !!(tags.领地规模 || tags.规模);
+  }
+
+  /** 写在上级 `内部资产` 里的附属领地（世界书：直接移动，不是复制） */
+  function nestedDomainsOf(asset) {
+    return normalizeInner(asset && asset.内部资产).filter(({ item }) => isDomainAsset(item));
+  }
+
+  /** 国家 / 位面 / 神国：自己不是领地，里面装着一堆领地 */
+  function isContainerAsset(asset) {
+    if (!asset || typeof asset !== 'object') return false;
+    if (isDomainAsset(asset)) return false;
+    return nestedDomainsOf(asset).length > 0;
+  }
+
+  /**
+   * 「我」的名号，用来匹配 `[拥有者:]`。
+   * 顺序：设置里手填 → 人设名 ctx.name1 → 存档里的姓名/名号/头衔/身份。
+   * 一律子串匹配——真实存档写的是 `拥有者:千星、音凛·星月`（联姻共管），
+   * 命中其中一个名字就算自己的。
+   */
+  function myNames(stat) {
+    const out = [];
+    const manual = String((prefs && prefs.myNames) || '').trim();
+    if (manual) out.push(...manual.split(/[,，、;；\s]+/).filter(Boolean));
+    try {
+      const ctx = getCtx();
+      if (ctx && ctx.name1) out.push(String(ctx.name1).trim());
+    } catch (e) { /* 忽略 */ }
+    const me = stat && stat.主角;
+    if (me && typeof me === 'object') {
+      for (const k of ['姓名', '名号', '头衔', '身份']) {
+        const v = me[k];
+        if (typeof v === 'string' && v.trim()) out.push(v.trim());
+      }
+    }
+    return Array.from(new Set(out.filter(Boolean)));
+  }
+
+  /** mine=自己的 / other=别人的 / unmarked=老存档没写拥有者（算自己的，但标出来） */
+  function ownershipOf(asset, names) {
+    const owner = String(parseTags(tagsText(asset && asset.标签)).拥有者 || '').trim();
+    if (!owner) return 'unmarked';
+    if (!names || !names.length) return 'unmarked';
+    for (const n of names) if (n && owner.indexOf(n) >= 0) return 'mine';
+    return 'other';
   }
 
   function normalizeInner(raw) {
@@ -2391,14 +2457,99 @@
     if (!stat || !stat.主角 || !stat.主角.资产) return out;
     const assets = stat.主角.资产;
     if (typeof assets !== 'object') return out;
+
+    const names = myNames(stat);
+    const byName = new Map();
+    const push = (name, asset, parent, nested, container) => {
+      if (byName.has(name)) {
+        /* 同一个名字先以顶层身份进来，后面又发现它挂在别人内部资产里：
+           只补上级，不重复收 */
+        const cur = byName.get(name);
+        if (!cur.parent && parent) cur.parent = parent;
+        return;
+      }
+      const tags = parseTags(tagsText(asset.标签));
+      const rec = {
+        name, asset,
+        container: !!container,
+        nested: !!nested,
+        parent: String(tags.上级资产 || '').trim() || String(parent || '').trim(),
+        own: container ? 'self' : ownershipOf(asset, names),
+        proto: String(tags.协议类型 || '').trim(),
+      };
+      byName.set(name, rec);
+      out.push(rec);
+    };
+
+    // ① 顶层：领地本身，以及装着领地的容器
     for (const name of Object.keys(assets)) {
       const a = assets[name];
       if (!a || typeof a !== 'object') continue;
-      const typeText = String(a.类型 == null ? (parseTags(tagsText(a.标签)).类型 || '') : a.类型);
-      if (!/^领地/.test(typeText)) continue;
-      out.push({ name, asset: a });
+      if (isDomainAsset(a)) push(name, a, '', false, false);
+      else if (isContainerAsset(a)) push(name, a, '', false, true);
     }
+
+    // ② 附属领地：写在上级的 内部资产 里
+    for (const name of Object.keys(assets)) {
+      const a = assets[name];
+      if (!a || typeof a !== 'object') continue;
+      for (const { key, item } of nestedDomainsOf(a)) push(key, item, name, true, false);
+    }
+
     return out;
+  }
+
+  /** 直辖 / 下级 / 附属 / 授封 / 外来 / 容器 */
+  function relationOf(d) {
+    if (d.container) return '容器';
+    if (d.nested) return d.own === 'other' ? '授封' : '附属';
+    if (d.own === 'other') {
+      if (d.parentName && /授封|册封|分封|附庸|藩|采邑/.test(String(d.proto || ''))) return '授封';
+      return d.parentName ? '授封' : '外来';
+    }
+    return d.parentName ? '下级' : '直辖';
+  }
+
+  /**
+   * 排成树再摊平：父在前、子在后，子缩进。
+   * 环（A 的上级是 B，B 的上级是 A）不会走进死循环，靠 seen 挡住，
+   * 剩下没走到的挂在末尾，不至于凭空消失。
+   */
+  function orderDomains(list) {
+    const byName = new Map(list.map((d) => [d.name, d]));
+    const kids = new Map();
+    const roots = [];
+    for (const d of list) {
+      const p = d.parentName && byName.get(d.parentName);
+      if (p && p !== d) {
+        if (!kids.has(p.name)) kids.set(p.name, []);
+        kids.get(p.name).push(d);
+      } else {
+        roots.push(d);
+      }
+    }
+    const RANK = { 直辖: 0, 容器: 1, 下级: 2, 附属: 3, 授封: 4, 外来: 5 };
+    const rankOf = (d) => (RANK[d.relation] == null ? 9 : RANK[d.relation]);
+    const sortKids = (arr) => arr.sort((a, b) => {
+      const r = rankOf(a) - rankOf(b);
+      if (r) return r;
+      const t = ((b.tier && b.tier.n) || 0) - ((a.tier && a.tier.n) || 0);
+      if (t) return t;
+      return String(a.name).localeCompare(String(b.name), 'zh');
+    });
+
+    const ordered = [];
+    const seen = new Set();
+    const walk = (d, depth) => {
+      if (seen.has(d.name)) return;
+      seen.add(d.name);
+      d.depth = depth;
+      ordered.push(d);
+      sortKids(kids.get(d.name) || []).forEach((k) => walk(k, depth + 1));
+    };
+    sortKids(roots).forEach((r) => walk(r, 0));
+    for (const d of list) if (!seen.has(d.name)) { d.depth = 0; ordered.push(d); }
+    return ordered;
   }
 
   /* ------------------------------------------- 七档阶梯与指标归一 */
@@ -2578,7 +2729,10 @@
     const msgIdx = lastStateIdx >= 0 ? lastStateIdx : Math.max(0, msgs.length - 1);
 
     const out = collectDomains(stat).map((d) => {
-      const items = normalizeInner(d.asset.内部资产).map(({ key, item }) => {
+      const items = normalizeInner(d.asset.内部资产)
+        /* 附属领地写在内部资产里，但它归属地，不该在「建筑」页冒充一座建筑 */
+        .filter(({ item }) => !isDomainAsset(item))
+        .map(({ key, item }) => {
         const info = buildInfoOf(buildInfo, key) || {};
         const tags = parseTags(tagsText(item.标签));
         const effects = effectLinesOf(item);
@@ -2607,6 +2761,12 @@
         report: reports.byDomain[d.name] || null,
         gov: mergedGov(d.asset, block), meta,
         tier: tierOf(meta.规模档 || (block && block.规模档)),
+        // 层级与归属：parent 是上级领地名（`[上级资产:]` 或写在上级内部资产里）
+        parentName: d.parent || '',
+        nested: !!d.nested,
+        container: !!d.container,
+        own: d.own || 'unmarked',
+        proto: d.proto || '',
       };
     });
 
@@ -2645,6 +2805,18 @@
       for (const it of d.items) if (it.missing) it.removed = removedNames.has(it.name);
     }
 
+    /* 属地树：先算关系，再按父子摊平。
+       `[上级资产:]` 指向的名字在列表里找不到（改名、拼错）时当顶层，
+       但记一笔 orphanParent，自检页会指出来——比悄悄丢掉好。 */
+    for (const d of out) {
+      d.relation = relationOf(d);
+      if (d.parentName) {
+        const p = out.find((x) => x.name === d.parentName);
+        if (!p || p === d) { d.orphanParent = d.parentName; d.parentName = ''; d.relation = relationOf(d); }
+      }
+    }
+    const tree = orderDomains(out);
+
     // 整份状态是从快照恢复的：建筑要标出来，别让人以为是这一轮刚读到的
     const fromSnapshot = lastStateSource === '存档快照';
     if (fromSnapshot) {
@@ -2656,7 +2828,7 @@
     }
 
     return {
-      domains: out,
+      domains: tree,
       plans: plans,
       reports: reports,
       patchCount: history.count,
@@ -2859,7 +3031,9 @@
     font-style: normal; font-size: calc(9px * var(--fl-fs, 1)); letter-spacing: 2.2px;
     color: var(--fl-dimmer); text-transform: uppercase;
   }
-  .fl-domsel { display: flex; gap: 6px; margin-left: 6px; flex-wrap: wrap; }
+  .fl-domsel { display: flex; gap: 6px; margin-left: 6px; flex-wrap: wrap; align-content: flex-start;
+    /* 国家/位面开局几十块领地，不能让属地树把页头顶穿——最多两行，多了自己滚 */
+    max-height: 58px; overflow-y: auto; }
   .fl-domchip {
     cursor: pointer; font-size: calc(11.5px * var(--fl-fs, 1)); letter-spacing: .8px; padding: 4px 10px;
     border-radius: 2px; color: var(--fl-dimmer); border: 1px solid transparent;
@@ -2867,6 +3041,16 @@
   }
   .fl-domchip:hover { color: var(--fl-text); border-color: var(--fl-line); }
   .fl-domchip.on { color: var(--fl-accent); border-color: var(--fl-line2); background: rgba(var(--fl-accent-rgb),0.08); }
+  /* 属地树：别人的地盘压暗，容器当分组标题，└ 表示下级 */
+  .fl-domchip.other { opacity: .62; }
+  .fl-domchip.other.on { opacity: 1; }
+  .fl-domchip.box { letter-spacing: 1.4px; color: rgba(var(--fl-accent-rgb),0.78); }
+  .fl-domchip em {
+    font-style: normal; margin-left: 5px; font-size: calc(9.5px * var(--fl-fs, 1));
+    letter-spacing: .4px; color: var(--fl-dimmer);
+  }
+  .fl-domchip.on em { color: rgba(var(--fl-accent-rgb),0.72); }
+  .fl-dombr { text-decoration: none; margin-right: 4px; color: var(--fl-line2); }
   .fl-top-r { margin-left: auto; display: flex; align-items: center; gap: 10px; }
   .fl-btn {
     cursor: pointer; border: 1px solid var(--fl-line2); background: rgba(var(--fl-accent-rgb),0.07);
@@ -4186,6 +4370,8 @@
   let keyword = '';
   let selected = null;
   let domIdx = 0;
+  // 属地排成树之后下标会变，靠名字记住当前看的是哪块
+  let domName = '';
   let root, star, screen, heroEl, tabsEl, viewEl, drawerEl, scrimEl, footEl, domselEl,
       badgeEl, toastEl, liveEl, sayEl, navEl, metricsEl, settingsEl, archListEl, archBarEl;
   // buildUI 里赋值：切到设置页时要用它把上一次停留的那一面恢复出来
@@ -4300,6 +4486,16 @@
                 <button class="fl-btn ghost" id="fl-diag-btn" type="button" style="width:100%">自检</button>
               </div>
               <div class="fl-sec-note" id="fl-read-note"></div>
+            </div>
+            <div class="fl-sec">
+              <div class="fl-sec-h">属 地 归 属<em>Owner</em><span></span></div>
+              <div class="fl-grid" style="grid-template-columns:1fr">
+                <label class="fl-opt" style="cursor:default">
+                  <u style="min-width:66px">我的名号</u>
+                  <input type="text" id="fl-myname" placeholder="留空则用人设名" style="flex:1;min-width:0">
+                </label>
+              </div>
+              <div class="fl-sec-note" id="fl-myname-note"></div>
             </div>
             <div class="fl-sec">
               <div class="fl-sec-h">数 据 来 源<em>Source</em><span></span></div>
@@ -4505,6 +4701,17 @@
       }, 40);
     });
     screen.querySelector('#fl-diag-btn').addEventListener('click', showDiag);
+
+    /* 我的名号：用来认 [拥有者:]，改完立刻重读一次，归属标记跟着变 */
+    const myNameBox = screen.querySelector('#fl-myname');
+    if (myNameBox) {
+      myNameBox.addEventListener('input', () => {
+        prefs.myNames = String(myNameBox.value || '');
+        savePrefs(prefs);
+        try { rescan(false, '名号'); } catch (e) { /* 忽略 */ }
+        fillMyNameNote();
+      });
+    }
 
     // 读取日志：复制走剪贴板，被浏览器拦了就让用户长按选取
     screen.querySelector('#fl-log-copy').addEventListener('click', () => {
@@ -4729,6 +4936,7 @@
         + '　·　领地 ' + data.domains.length + ' 块';
     }
     const list = screen.querySelector('#fl-src-list');
+    fillMyNameNote();
     if (!list) return;
     const chips = [
       ['消息变量', 'stat_data 在消息变量里，最权威'],
@@ -4747,8 +4955,25 @@
     renderLog();
   }
 
-  /** 一条日志里的数字串：楼层 → 消息 → 补丁 → 数量，缺的项直接跳过 */
-  function logBits(r) {
+  /** 「我的名号」那一行的说明：现在拿什么在比对，认出来几块 */
+  function fillMyNameNote() {
+    const box = screen.querySelector('#fl-myname');
+    const note = screen.querySelector('#fl-myname-note');
+    if (box && box.value !== String(prefs.myNames || '')) box.value = String(prefs.myNames || '');
+    if (!note) return;
+    let names = [];
+    try { names = myNames(resolveState(true)); } catch (e) { names = []; }
+    const list = (data && data.domains) || [];
+    const n = (k) => list.filter((d) => d.own === k).length;
+    note.textContent = names.length
+      ? '正在比对：' + names.join('、')
+        + '　·　自己的 ' + n('mine') + ' 块'
+        + (n('other') ? '　·　别人的 ' + n('other') + ' 块' : '')
+        + (n('unmarked') ? '　·　未标归属 ' + n('unmarked') + ' 块' : '')
+      : '没有可用的名号（没填，也读不到人设名），归属一律按「未标归属」处理。';
+  }
+
+  /** 一条日志里的数字串：楼层 → 消息 → 补丁 → 数量，缺的项直接跳过 */  function logBits(r) {
     const bits = [];
     if (r.idx != null && r.idx >= 0) bits.push('楼 ' + (r.idx + 1));
     if (r.msgs != null) bits.push('消息 ' + r.msgs);
@@ -5160,7 +5385,25 @@
   function currentDomain() {
     if (!data.domains.length) return null;
     if (domIdx >= data.domains.length) domIdx = 0;
-    return data.domains[domIdx];
+    const d = data.domains[domIdx];
+    if (d) domName = d.name;
+    return d;
+  }
+
+  /**
+   * 重读之后把选中项锚回原来那块领地。
+   * 排序规则一改、或者 AI 新加了一块，下标就对不上了——
+   * 不锚的话，国家开局几十块领地时会莫名其妙跳到别人的地盘上。
+   */
+  function keepDomainFocus() {
+    const list = (data && data.domains) || [];
+    if (!list.length) { domIdx = 0; domName = ''; return; }
+    const at = domName ? list.findIndex((d) => d.name === domName) : -1;
+    if (at >= 0) { domIdx = at; return; }
+    // 原来那块没了：落到第一块自己的领地（直辖优先，其次下级/附属）
+    const first = list.findIndex((d) => d.relation === '直辖' || d.relation === '下级' || d.relation === '附属');
+    domIdx = first >= 0 ? first : 0;
+    domName = list[domIdx] ? list[domIdx].name : '';
   }
 
   function sumMoney(list) {
@@ -5220,13 +5463,26 @@
   }
 
   /* ------------------------------------------------------------ 头部 */
+  /** 顶栏的属地树：缩进表示层级，右侧小字标关系，别人的地盘压暗 */
   function renderTop(d) {
-    domselEl.innerHTML = data.domains.length > 1
-      ? data.domains.map((x, i) => `<span class="fl-domchip${i === domIdx ? ' on' : ''}" data-i="${i}">${esc(x.name)}</span>`).join('')
+    const list = data.domains || [];
+    domselEl.innerHTML = list.length > 1
+      ? list.map((x, i) => {
+        const depth = Math.min(x.depth || 0, 3);
+        const cls = ['fl-domchip'];
+        if (i === domIdx) cls.push('on');
+        if (x.relation === '授封' || x.relation === '外来') cls.push('other');
+        if (x.relation === '容器') cls.push('box');
+        const rel = x.relation && x.relation !== '直辖' ? `<em>${esc(x.relation)}</em>` : '';
+        const br = depth ? '<s class="fl-dombr">└</s>' : '';
+        return `<span class="${cls.join(' ')}" data-i="${i}" style="margin-left:${depth * 11}px">${br}${esc(x.name)}${rel}</span>`;
+      }).join('')
       : '';
     domselEl.querySelectorAll('.fl-domchip').forEach((c) => {
       c.addEventListener('click', () => {
         domIdx = Number(c.dataset.i) || 0;
+        const cur = data.domains[domIdx];
+        domName = cur ? cur.name : '';
         closeDrawer();
         render();
       });
@@ -5248,6 +5504,16 @@
     const st = meta.领地状态 || info.状态 || landStateOf((d && d.asset) || {});
     if (st) out.push(['状态 ' + st, '']);
     if (meta.拥有者) out.push(['拥有者 ' + meta.拥有者, '']);
+    /* 属地：上级/下级/授封一目了然，省得点进树里数 */
+    const kids = ((data && data.domains) || []).filter((x) => x !== d && x.parentName === d.name);
+    if (kids.length) {
+      const cnt = {};
+      for (const k of kids) cnt[k.relation] = (cnt[k.relation] || 0) + 1;
+      out.push(['属地 ' + Object.keys(cnt).map((k) => k + cnt[k]).join('·'), 'blue']);
+    }
+    if (d.parentName) out.push(['上级 ' + d.parentName, '']);
+    if (d.relation === '授封' || d.relation === '外来') out.push([d.relation, '']);
+    if (d.own === 'unmarked' && !meta.拥有者) out.push(['未标归属', '']);
     if (info.治下 && info.治下.副) out.push(['副手 ' + info.治下.副, '']);
     if (d.fromStore && !d.items.some((x) => !x.missing)) out.push(['档案复原', 'blue']);
     return out.map(([t, c]) => `<span class="fl-chip ${c}">${esc(t)}</span>`).join('');
@@ -5471,6 +5737,44 @@
       ? `<div class="fl-box fl-notice fl-notice-2">${notices.slice(0, 8).map((x) => `<div class="fl-notice-r"><i></i><span><b>${esc(x.label)}</b>　${esc(x.text)}</span></div>`).join('')}</div>`
       : `<div class="fl-box"><div class="fl-empty" style="padding:16px 8px"><small>总览区块里没有要事、营造或邻邦动向</small></div></div>`;
     html += section('要 事', notices.length ? '当前最要紧的几件' : '', noticeBody);
+
+    /* 属 地：挂在当前这块下面的领地。
+       并表的下级按契约把金库写 0Z，定额并进上级 [收入|下辖并表]，
+       所以这里只如实显示 0，不替它加总。 */
+    const kids = (data.domains || []).filter((x) => x !== d && x.parentName === d.name);
+    if (kids.length) {
+      const cnt = {};
+      for (const k of kids) cnt[k.relation] = (cnt[k.relation] || 0) + 1;
+      const sub = Object.keys(cnt).map((k) => k + ' ' + cnt[k]).join(' · ');
+      const rows = kids.map((k) => {
+        const g2 = k.gov || {};
+        const gi = k.info || {};
+        const tierName = (k.tier && k.tier.name) || (k.meta && k.meta.规模档) || '—';
+        const vault = g2.金库;
+        const money = vault == null ? '—' : fmtNum(vault) + ' ' + (g2.货币 || '');
+        const merged = vault === 0 ? '（并表）' : '';
+        const units2 = militaryOf(k);
+        const troops = units2.reduce((a, u) => a + (u.n || 0), 0);
+        const ownMark = k.own === 'unmarked' ? '　<span class="fl-tag">未标归属</span>' : '';
+        return `<div class="fl-kv" style="display:block;padding:9px 0">
+          <div style="display:flex;align-items:baseline;gap:9px">
+            <span style="flex:1;color:var(--fl-bright);font-size:calc(12.5px * var(--fl-fs,1));letter-spacing:.4px">${esc(k.name)}</span>
+            <span class="fl-tag">${esc(tierName)}</span>
+            <span style="color:var(--fl-dimmer);font-size:calc(10.5px * var(--fl-fs,1))">${esc(k.relation || '')}</span>
+          </div>
+          <div style="margin-top:5px;font-size:calc(11px * var(--fl-fs,1));color:rgba(var(--fl-text-rgb),.6)">
+            治安 ${esc(String(g2.治安 || gi.治安 || '—'))}　民心 ${esc(String(g2.民心 || gi.民心 || '—'))}
+            　金库 ${esc(money)}${merged}　驻军 ${troops ? fmtNum(troops) + ' 人' : '—'}${ownMark}
+          </div>
+        </div>`;
+      }).join('');
+      html += section('属 地', sub, `<div class="fl-box"><div class="fl-kvs">${rows}</div></div>`);
+    } else if (d.own === 'unmarked') {
+      html += section('属 地', '未标归属', `<div class="fl-box"><div class="fl-notice">
+        <div class="fl-notice-r"><i></i><span>这块领地的标签里没有 <b>[拥有者:]</b>，所以没法判断是不是你的。
+          老存档常见，当自己的处理。要精确区分，去「设置 → 读取 → 我的名号」填一下名字。</span></div>
+      </div></div>`);
+    }
 
     html += `<div class="fl-duo"><div>`;
 
@@ -6800,6 +7104,22 @@
     html += row('领地资产', domains.length ? yes(domains.length + ' 块') : warn('0 块'));
     html += row('建筑', n ? yes(n + ' 座') : warn('0 座'));
 
+    /* 属地归属：认错领地基本都出在这一段，摊开给人看 */
+    const tree = data.domains || [];
+    const ownN = (k) => tree.filter((d) => d.own === k).length;
+    html += row('属地归属', tree.length
+      ? yes('自己的 ' + ownN('mine') + ' · 别人的 ' + ownN('other') + ' · 未标 ' + ownN('unmarked'))
+      : warn('没有领地'));
+    let myNameList = [];
+    try { myNameList = myNames(resolveState(true)); } catch (e) { myNameList = []; }
+    html += row('我的名号', myNameList.length
+      ? yes(esc(myNameList.join('、')))
+      : warn('空——设置 → 读取 → 我的名号，或读不到人设名'));
+    const orph = tree.filter((d) => d.orphanParent);
+    html += row('上级对不上号', orph.length
+      ? warn(orph.map((d) => esc(d.name) + ' → ' + esc(d.orphanParent)).join('；'))
+      : yes('没有'));
+
     html += '<div class="fl-diag-h">区 块 与 账 本</div>';
     const withBlock = data.domains.filter((d) => d.info).length;
     html += row('总览区块', withBlock ? yes(withBlock + ' 块有 [领地] 行') : warn('没有读到 <fief_domain>'));
@@ -7003,6 +7323,7 @@
     fires += 1;
     const at = Date.now();
     data = buildLedger();
+    keepDomainFocus();
     applyFixes(data);
     notes = readNotesFallback();
 
