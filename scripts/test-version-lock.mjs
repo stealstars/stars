@@ -21,11 +21,18 @@ const ok = (n, c, e) => {
 
 const SRC = fs.readFileSync('D:/223/fief-ledger/loader.js', 'utf8');
 
-/* ---------- 1. 默认不锁 ---------- */
-console.log('=== 1. 默认跟随最新 ===');
+/* ---------- 1. 发布版必须锁在自己的版本上 ----------
+   留空 = 跟 main：我在 main 上写炸一次，所有装了的人都跟着炸，
+   版本锁就形同虚设。所以 loader.js 里的 TARGET_VERSION 必须等于 package.json。 */
+console.log('=== 1. 版本锁对齐发布版本 ===');
 const m = SRC.match(/const TARGET_VERSION = '([^']*)';/);
+const PKG = JSON.parse(fs.readFileSync('D:/223/fief-ledger/package.json', 'utf8'));
 ok('找到 TARGET_VERSION', !!m);
-ok("默认值是空字符串（不锁）", m && m[1] === '', m && m[1]);
+ok('不是空的（空了就等于跟 main）', m && m[1] !== '', m && m[1]);
+ok('与 package.json 一致', m && m[1] === PKG.version, (m && m[1]) + ' vs ' + PKG.version);
+ok('build.mjs 会自动对齐，不靠记性',
+  fs.readFileSync('D:/223/fief-ledger/scripts/build.mjs', 'utf8')
+    .includes("/(const TARGET_VERSION = ')[^']*(')/"));
 
 /* ---------- 1b. manifest 与 loader.js 必须同步 ----------
    踩过的坑：改了 loader.js 忘了提 LOADER_VERSION，线上本地都写着 2，

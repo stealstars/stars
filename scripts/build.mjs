@@ -60,6 +60,26 @@ if (bump) {
   console.log('版本 → ' + pkg.version);
 }
 
+/* ---------------- 版本锁自检 ----------------
+   发布出去的 loader 必须锁在「这次发布的版本」上，不能留空。
+   留空 = 谁用谁跟 main：我在 main 上写炸一次，所有已经装了的人跟着炸，
+   锁了版本的人也不保险。这就是当初做 tag 版本锁的原因
+   （「别人用0.1，要改版本号改成0.2才能最新」）。
+
+   所以 build 时把 TARGET_VERSION 对齐到 package.json 的版本，
+   不靠记性——漏填一次就等于锁形同虚设。 */
+const loaderPath0 = path.join(ROOT, 'loader.js');
+const loaderSrc0 = fs.readFileSync(loaderPath0, 'utf8');
+const lockMatch = loaderSrc0.match(/const TARGET_VERSION = '([^']*)';/);
+if (lockMatch && lockMatch[1] !== pkg.version) {
+  const fixed = loaderSrc0.replace(
+    /(const TARGET_VERSION = ')[^']*(')/,
+    '$1' + pkg.version + '$2',
+  );
+  fs.writeFileSync(loaderPath0, fixed, 'utf8');
+  console.log('[自动] 版本锁 ' + (lockMatch[1] || '（空）') + ' → ' + pkg.version);
+}
+
 /* ---------------- 加载器版本自检 ----------------
    踩过的坑：改了 loader.js 却忘了把 LOADER_VERSION 往上提，结果线上和本地
    版本号一样，酒馆里那份旧 loader 判断「不比我的新」，永远不更新——改了等于
