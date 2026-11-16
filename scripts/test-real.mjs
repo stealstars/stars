@@ -60,6 +60,7 @@ const SRC = [
   cut('  function normalizeInner(raw)'),
   cut('  function parseTags(str)'),
   cut('  function tagsText(v)'),
+  cut('  function isDomainAsset(asset)'),
   cut('  function effectText(v)'),
   cut('  function effectLinesOf(item)'),
   cut('  function cnNumber(v)'),

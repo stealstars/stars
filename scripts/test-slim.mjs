@@ -49,6 +49,11 @@ const M = new Function(
     const b = CORE.indexOf('  /** 领地资产的元信息');
     return CORE.slice(a, b).trim();
   })() + '\n'
+  + 'const isDomainAsset = ' + (() => {
+    const a = CORE.indexOf('  function isDomainAsset(asset) {');
+    const b = CORE.indexOf('  /** 写在上级');
+    return CORE.slice(a, b).trim();
+  })() + '\n'
   + SRC
   + '\n; return { normQty, slimEffects, slimmableOf, slimStats, slimAssets, loadSlims };',
 )(HOST);
@@ -147,6 +152,29 @@ console.log('\n=== 4. 该压哪些 ===');
   ok('只统计领地', sm.n === 2, sm.n);
   ok('领地一块', sm.domain === 1, sm.domain);
   ok('空存档不炸', M.slimStats(null).n === 0);
+}
+
+/* ---------------- 4b. 附属领地不是建筑，不许压 ---------------- */
+console.log('\n=== 4b. 附属领地不当建筑压 ===');
+{
+  const asset = {
+    类型: '领地',
+    标签: ['拥有者:千星', '领地规模:小国或帝国行省'],
+    内部资产: {
+      铁匠铺: { 品质: '优良', 数量: 1, 描述: '老铁匠铺' },
+      // 附属领地：写在内部资产里，但它归属地
+      白石关哨所: {
+        类型: '领地',
+        标签: ['拥有者:千星', '领地规模:小型村镇'],
+        描述: '治理: 治安72｜民心68｜物资充足｜人口数百人。边关哨所。',
+        总占用空间: '3 亩',
+      },
+    },
+  };
+  const list = M.slimmableOf(asset);
+  ok('只压铁匠铺', list.length === 1, list.map((x) => x.key).join(','));
+  ok('附属领地不在名单里', !list.some((x) => x.key === '白石关哨所'), list.map((x) => x.key).join(','));
+  ok('铁匠铺照压', list.some((x) => x.key === '铁匠铺'));
 }
 
 /* ---------------- 5. 真删字段 ---------------- */

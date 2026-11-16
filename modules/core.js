@@ -1146,6 +1146,59 @@
     return 'other';
   }
 
+  /**
+   * 治权凭证。世界书写的是：
+   *   [治权凭证](效果:`领地名 规模档: 所属势力|治权来源|取得日期|当前状态`)
+   *
+   * 为什么靠它认「代管」而不是靠名字：凭证写在**你的**资产里。
+   * 凭证指着哪块地，那块地的治权就是你的——哪怕 [拥有者:] 写的是帝国或某个总督。
+   * 省督 / 总督 / 督办 / 开荒官这类「管着不是自己的地」，变量里唯一的凭据就是它。
+   *
+   * 反过来不能拿「描述里出现了我的名字」当判据：授封的领地描述里必然写
+   * 「效忠对象:{{user}}」，一搜就中，会把封臣的地全认成自己在代管。
+   */
+  function authorityMapOf(stat) {
+    const map = new Map();
+    const assets = stat && stat.主角 && stat.主角.资产;
+    if (!assets || typeof assets !== 'object') return map;
+
+    const take = (text, fallbackName) => {
+      const s = String(text || '');
+      if (s.indexOf('|') < 0) return;
+      const parts = s.split('|').map((x) => x.trim());
+      if (parts.length < 2) return;
+      const head = parts[0];
+      const at = head.indexOf(':');
+      const raw = at >= 0 ? head.slice(0, at) : head;
+      // 「白鹭浅滩男爵领 大型城市」→ 去掉末尾那个规模档词
+      const name = raw.replace(/\s+\S+$/, '').trim() || String(fallbackName || '').trim();
+      if (!name) return;
+      map.set(name, {
+        势力: at >= 0 ? head.slice(at + 1).trim() : '',
+        来源: parts[1] || '',
+        日期: parts[2] || '',
+        状态: parts[3] || '',
+      });
+    };
+
+    const certOf = (key, item) => {
+      const blob = [key, item.类型, tagsText(item.标签)].join(' ');
+      if (!/凭证/.test(blob)) return;
+      const values = Object.values(item.效果 || {}).map((v) => String(v == null ? '' : v));
+      if (typeof item.描述 === 'string') values.push(item.描述);
+      values.forEach((v) => take(v, key));
+    };
+
+    for (const key of Object.keys(assets)) {
+      const a = assets[key];
+      if (!a || typeof a !== 'object') continue;
+      // 凭证可能是一级资产，也可能塞在某个资产的内部资产里
+      if (!isDomainAsset(a)) certOf(key, a);
+      for (const { key: ik, item } of normalizeInner(a.内部资产)) certOf(ik, item);
+    }
+    return map;
+  }
+
   function normalizeInner(raw) {
     const list = [];
     if (!raw) return list;
@@ -2459,24 +2512,32 @@
     if (typeof assets !== 'object') return out;
 
     const names = myNames(stat);
+    const authMap = authorityMapOf(stat);
     const byName = new Map();
     const push = (name, asset, parent, nested, container) => {
       if (byName.has(name)) {
         /* 同一个名字先以顶层身份进来，后面又发现它挂在别人内部资产里：
            只补上级，不重复收 */
         const cur = byName.get(name);
-        if (!cur.parent && parent) cur.parent = parent;
+        if (!cur.parentName && parent) cur.parentName = parent;
         return;
       }
       const tags = parseTags(tagsText(asset.标签));
+      const proto = String(tags.协议类型 || '').trim();
       const rec = {
         name, asset,
         container: !!container,
         nested: !!nested,
-        parent: String(tags.上级资产 || '').trim() || String(parent || '').trim(),
+        parentName: String(tags.上级资产 || '').trim() || String(parent || '').trim(),
         own: container ? 'self' : ownershipOf(asset, names),
-        proto: String(tags.协议类型 || '').trim(),
+        proto,
+        auth: authMap.get(name) || null,
       };
+      /* 拥有者不是我，但我手里有这块地的治权凭证 → 我在代管。
+         有 `协议类型:授封` 的优先判授封：那是封臣在管我的地，方向相反。 */
+      if (rec.own === 'other' && !/授封|册封|分封|附庸|藩|采邑/.test(proto) && rec.auth) {
+        rec.own = 'governed';
+      }
       byName.set(name, rec);
       out.push(rec);
     };
@@ -2499,9 +2560,10 @@
     return out;
   }
 
-  /** 直辖 / 下级 / 附属 / 授封 / 外来 / 容器 */
+  /** 直辖 / 代管 / 下级 / 附属 / 授封 / 外来 / 容器 */
   function relationOf(d) {
     if (d.container) return '容器';
+    if (d.own === 'governed') return '代管';
     if (d.nested) return d.own === 'other' ? '授封' : '附属';
     if (d.own === 'other') {
       if (d.parentName && /授封|册封|分封|附庸|藩|采邑/.test(String(d.proto || ''))) return '授封';
@@ -2528,7 +2590,7 @@
         roots.push(d);
       }
     }
-    const RANK = { 直辖: 0, 容器: 1, 下级: 2, 附属: 3, 授封: 4, 外来: 5 };
+    const RANK = { 直辖: 0, 代管: 1, 容器: 2, 下级: 3, 附属: 4, 授封: 5, 外来: 6 };
     const rankOf = (d) => (RANK[d.relation] == null ? 9 : RANK[d.relation]);
     const sortKids = (arr) => arr.sort((a, b) => {
       const r = rankOf(a) - rankOf(b);
@@ -2718,6 +2780,25 @@
     };
   }
 
+  /**
+   * 辖区：挂在谁的树里，就归谁管——不看 [拥有者:]，只看层级。
+   *
+   * 行省/大国开局，下面的郡县多半是封臣或地方贵族持有的，`[拥有者:]` 写着他们的名字，
+   * 但那是我要管的下级土地。要是按拥有者筛，整棵树会被压暗一大半，
+   * 看起来像「这些都不是我的」——这正是原来那个毛病。
+   * 只有根上就是别人的（外来），才真的跟我没关系。
+   *
+   * tree 是父在前子在后（orderDomains 保证），顺着推一遍就够。
+   */
+  function markJurisdiction(tree) {
+    const byName = new Map(tree.map((d) => [d.name, d]));
+    for (const d of tree) {
+      const p = d.parentName ? byName.get(d.parentName) : null;
+      d.jurisdiction = p ? !!p.jurisdiction : (d.own !== 'other');
+    }
+    return tree;
+  }
+
   function buildLedger() {
     const stat = resolveState();
     const msgs = getMessages();
@@ -2762,11 +2843,12 @@
         gov: mergedGov(d.asset, block), meta,
         tier: tierOf(meta.规模档 || (block && block.规模档)),
         // 层级与归属：parent 是上级领地名（`[上级资产:]` 或写在上级内部资产里）
-        parentName: d.parent || '',
+        parentName: d.parentName || '',
         nested: !!d.nested,
         container: !!d.container,
         own: d.own || 'unmarked',
         proto: d.proto || '',
+        auth: d.auth || null,
       };
     });
 
@@ -2816,6 +2898,7 @@
       }
     }
     const tree = orderDomains(out);
+    markJurisdiction(tree);
 
     // 整份状态是从快照恢复的：建筑要标出来，别让人以为是这一轮刚读到的
     const fromSnapshot = lastStateSource === '存档快照';
@@ -5401,7 +5484,8 @@
     const at = domName ? list.findIndex((d) => d.name === domName) : -1;
     if (at >= 0) { domIdx = at; return; }
     // 原来那块没了：落到第一块自己的领地（直辖优先，其次下级/附属）
-    const first = list.findIndex((d) => d.relation === '直辖' || d.relation === '下级' || d.relation === '附属');
+    const first = list.findIndex((d) => d.relation === '直辖' || d.relation === '代管'
+      || d.relation === '下级' || d.relation === '附属');
     domIdx = first >= 0 ? first : 0;
     domName = list[domIdx] ? list[domIdx].name : '';
   }
@@ -5471,8 +5555,9 @@
         const depth = Math.min(x.depth || 0, 3);
         const cls = ['fl-domchip'];
         if (i === domIdx) cls.push('on');
-        if (x.relation === '授封' || x.relation === '外来') cls.push('other');
         if (x.relation === '容器') cls.push('box');
+        // 只压暗真正跟我无关的：树里我的下级土地，哪怕拥有者是封臣也正常显示
+        if (x.jurisdiction === false) cls.push('other');
         const rel = x.relation && x.relation !== '直辖' ? `<em>${esc(x.relation)}</em>` : '';
         const br = depth ? '<s class="fl-dombr">└</s>' : '';
         return `<span class="${cls.join(' ')}" data-i="${i}" style="margin-left:${depth * 11}px">${br}${esc(x.name)}${rel}</span>`;
@@ -5504,6 +5589,9 @@
     const st = meta.领地状态 || info.状态 || landStateOf((d && d.asset) || {});
     if (st) out.push(['状态 ' + st, '']);
     if (meta.拥有者) out.push(['拥有者 ' + meta.拥有者, '']);
+    /* 代管：地是别人的，治权在你手里——靠 [治权凭证] 认，别跟授封搞混 */
+    if (d.relation === '代管') out.push(['代管', 'blue']);
+    if (d.auth && d.auth.来源) out.push(['治权 ' + d.auth.来源, '']);
     /* 属地：上级/下级/授封一目了然，省得点进树里数 */
     const kids = ((data && data.domains) || []).filter((x) => x !== d && x.parentName === d.name);
     if (kids.length) {
@@ -5756,6 +5844,9 @@
         const units2 = militaryOf(k);
         const troops = units2.reduce((a, u) => a + (u.n || 0), 0);
         const ownMark = k.own === 'unmarked' ? '　<span class="fl-tag">未标归属</span>' : '';
+        /* 拥有者不是我的，就把名字摆出来——地是我管，产权是他的 */
+        const owner = String((k.meta && k.meta.拥有者) || '');
+        const ownerMark = owner && k.own !== 'mine' ? '　拥有者 ' + esc(owner) : '';
         return `<div class="fl-kv" style="display:block;padding:9px 0">
           <div style="display:flex;align-items:baseline;gap:9px">
             <span style="flex:1;color:var(--fl-bright);font-size:calc(12.5px * var(--fl-fs,1));letter-spacing:.4px">${esc(k.name)}</span>
@@ -5764,7 +5855,7 @@
           </div>
           <div style="margin-top:5px;font-size:calc(11px * var(--fl-fs,1));color:rgba(var(--fl-text-rgb),.6)">
             治安 ${esc(String(g2.治安 || gi.治安 || '—'))}　民心 ${esc(String(g2.民心 || gi.民心 || '—'))}
-            　金库 ${esc(money)}${merged}　驻军 ${troops ? fmtNum(troops) + ' 人' : '—'}${ownMark}
+            　金库 ${esc(money)}${merged}　驻军 ${troops ? fmtNum(troops) + ' 人' : '—'}${ownerMark}${ownMark}
           </div>
         </div>`;
       }).join('');
@@ -5914,6 +6005,12 @@
     const payer = pay.reduce((a, x) => a + (x.数额 || 0), 0);
 
     if (!units.length) {
+      /* 行省/大国这一层常常只记编制归属，兵在下级领地里——别让人以为丢了 */
+      const kids = ((data && data.domains) || []).filter((x) => x !== d && x.parentName === d.name);
+      if (kids.length) {
+        return `<div class="fl-empty"><b>◇</b>本级没有驻军
+          <small>兵在下级 ${kids.length} 块领地里，各自的人数见「属地」一节</small></div>`;
+      }
       return `<div class="fl-empty"><b>◇</b>没有驻军记录
         <small>军事写在领地内部资产里，类型为兵种、数量为人数的条目</small></div>`;
     }
@@ -7108,7 +7205,8 @@
     const tree = data.domains || [];
     const ownN = (k) => tree.filter((d) => d.own === k).length;
     html += row('属地归属', tree.length
-      ? yes('自己的 ' + ownN('mine') + ' · 别人的 ' + ownN('other') + ' · 未标 ' + ownN('unmarked'))
+      ? yes('自己的 ' + ownN('mine') + ' · 代管 ' + ownN('governed')
+        + ' · 别人的 ' + ownN('other') + ' · 未标 ' + ownN('unmarked'))
       : warn('没有领地'));
     let myNameList = [];
     try { myNameList = myNames(resolveState(true)); } catch (e) { myNameList = []; }

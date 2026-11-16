@@ -43,14 +43,16 @@ const SRC = [
   cut('  function isContainerAsset(asset)'),
   cut('  function myNames(stat)'),
   cut('  function ownershipOf(asset, names)'),
+  cut('  function authorityMapOf(stat)'),
   cut('  function collectDomains(stat)'),
   cut('  function relationOf(d)'),
   cut('  function orderDomains(list)'),
+  cut('  function markJurisdiction(tree)'),
 ].join('\n');
 
 /* prefs / getCtx 是运行时的东西，这里给可控的替身 */
 const P = new Function('getCtx', 'prefs', SRC + '\n; return { isDomainAsset, isContainerAsset, ownershipOf,'
-  + ' myNames, collectDomains, relationOf, orderDomains, nestedDomainsOf };');
+  + ' myNames, collectDomains, relationOf, orderDomains, nestedDomainsOf, authorityMapOf, markJurisdiction };');
 
 const make = (opts = {}) => {
   const prefs = { myNames: opts.myNames || '' };
@@ -117,6 +119,67 @@ console.log('\n=== 4. 关系归类 ===');
   ok('容器单独一类', M.relationOf({ container: true }) === '容器');
 }
 
+/* ---------------- 4b. 代管：地是别人的，治权是我的 ---------------- */
+console.log('\n=== 4b. 代管（省督/总督/督办）===');
+{
+  /* 世界书的凭证写法：领地名 规模档: 所属势力|治权来源|取得日期|当前状态 */
+  const cert = { 类型: '凭证', 效果: { 凭证: '白鸦领 大型城市: 奥古斯提姆帝国|中央任命|2026-03-01|在任' } };
+  const stat = {
+    主角: {
+      资产: {
+        白鸦领: {
+          类型: '领地',
+          标签: ['拥有者:奥古斯提姆帝国', '领地规模:大型城市', '所属势力:奥古斯提姆帝国'],
+          内部资产: { 治权凭证: cert },
+        },
+      },
+    },
+  };
+  const got = M.collectDomains(stat);
+  ok('凭证认出来了', !!got[0].auth, JSON.stringify(got[0].auth));
+  ok('领地名从凭证里抠对', !!got[0].auth && got[0].auth.来源 === '中央任命', got[0].auth && got[0].auth.来源);
+  ok('势力也对', !!got[0].auth && got[0].auth.势力 === '奥古斯提姆帝国', got[0].auth && got[0].auth.势力);
+  ok('拥有者不是我 → 但判代管', got[0].own === 'governed', got[0].own);
+  ok('关系是代管', M.relationOf(got[0]) === '代管', M.relationOf(got[0]));
+
+  /* 授封方向相反：地是我的、封臣在管。就算描述里写着效忠我，也不能判成代管 */
+  const fief = {
+    主角: {
+      资产: {
+        封臣领: {
+          类型: '领地',
+          标签: ['拥有者:灰岩侯', '领地规模:中型城镇', '协议类型:授封', '上级资产:白鸦领'],
+          描述: '封臣义务:岁贡与征召。效忠对象:千星。',
+          内部资产: { 治权凭证: { 类型: '凭证', 效果: { 凭证: '封臣领 中型城镇: 千星家族|受封|2026-04-01|在任' } } },
+        },
+        白鸦领: { 类型: '领地', 标签: ['拥有者:千星', '领地规模:大型城市'] },
+      },
+    },
+  };
+  const gf = M.collectDomains(fief);
+  const byName2 = {};
+  for (const d of gf) byName2[d.name] = d;
+  ok('授封不被凭证抢成代管', byName2['封臣领'].own === 'other', byName2['封臣领'].own);
+  ok('授封关系还是授封', M.relationOf(byName2['封臣领']) === '授封', M.relationOf(byName2['封臣领']));
+
+  /* 没凭证的别人领地，仍然是外来 */
+  const noCert = M.collectDomains({ 主角: { 资产: { 灰岩镇: { 类型: '领地', 标签: ['拥有者:灰岩侯', '领地规模:中型城镇'] } } } });
+  ok('没凭证 → 外来', noCert[0].own === 'other' && M.relationOf(noCert[0]) === '外来', noCert[0].own);
+
+  /* 凭证是一级资产也要认 */
+  const topCert = M.collectDomains({
+    主角: {
+      资产: {
+        白鸦领: { 类型: '领地', 标签: ['拥有者:奥古斯提姆帝国', '领地规模:大型城市'] },
+        治权凭证: { 类型: '凭证', 效果: { 凭证: '白鸦领 大型城市: 奥古斯提姆帝国|世袭|2026-01-01|在任' } },
+      },
+    },
+  });
+  const c1 = topCert.find((d) => d.name === '白鸦领');
+  ok('一级资产里的凭证也认', c1 && c1.own === 'governed', c1 && c1.own);
+  ok('凭证自己不当领地', topCert.length === 1, topCert.map((d) => d.name).join(','));
+}
+
 /* ---------------- 5. 排序与层级 ---------------- */
 console.log('\n=== 5. 排成树 ===');
 {
@@ -141,6 +204,35 @@ console.log('\n=== 5. 排成树 ===');
   ];
   const oc = M.orderDomains(cyc);
   ok('环不死循环且都留着', oc.length === 2, oc.length);
+}
+
+/* ---------------- 5b. 辖区：按层级，不按拥有者 ---------------- */
+console.log('\n=== 5b. 辖区（行省/大国视角）===');
+{
+  const stat = {
+    主角: {
+      资产: {
+        西境行省: { 类型: '领地', 标签: ['拥有者:千星', '领地规模:小国或帝国行省'] },
+        白鸦郡: { 类型: '领地', 标签: ['拥有者:千星', '领地规模:大型城市', '上级资产:西境行省'] },
+        灰岩县: { 类型: '领地', 标签: ['拥有者:灰岩侯', '领地规模:中型城镇', '上级资产:白鸦郡', '协议类型:授封'] },
+        黑石村: { 类型: '领地', 标签: ['拥有者:黑石长老', '领地规模:村庄', '上级资产:灰岩县'] },
+        东境行省: { 类型: '领地', 标签: ['拥有者:别家公爵', '领地规模:小国或帝国行省'] },
+      },
+    },
+  };
+  const tree = M.orderDomains(M.collectDomains(stat));
+  for (const d of tree) if (!d.relation) d.relation = M.relationOf(d);
+  M.markJurisdiction(tree);
+  const by = {};
+  for (const d of tree) by[d.name] = d;
+
+  ok('行省是我的', by['西境行省'].jurisdiction === true);
+  ok('郡是我的', by['白鸦郡'].jurisdiction === true);
+  ok('封臣的县也算我辖区', by['灰岩县'].jurisdiction === true, by['灰岩县'].jurisdiction);
+  ok('孙辈的村也算', by['黑石村'].jurisdiction === true, by['黑石村'].jurisdiction);
+  ok('别人的行省不算', by['东境行省'].jurisdiction === false, by['东境行省'].jurisdiction);
+  ok('封臣县仍标授封', by['灰岩县'].relation === '授封', by['灰岩县'].relation);
+  ok('层级排对：行省→郡→县→村', by['黑石村'].depth === 3, by['黑石村'].depth);
 }
 
 /* ---------------- 6. collectDomains 全流程 ---------------- */
@@ -176,8 +268,8 @@ console.log('\n=== 6. 一次收全 ===');
   for (const d of got) byName[d.name] = d;
   ok('白鸦领是我的', byName['白鸦领'].own === 'mine', byName['白鸦领'].own);
   ok('灰岩镇是别人的', byName['灰岩镇'].own === 'other', byName['灰岩镇'].own);
-  ok('哨所挂在白鸦领下', byName['白石哨所'].parent === '白鸦领', byName['白石哨所'].parent);
-  ok('云上城挂在位面下', byName['云上城'].parent === '王座位面', byName['云上城'].parent);
+  ok('哨所挂在白鸦领下', byName['白石哨所'].parentName === '白鸦领', byName['白石哨所'].parentName);
+  ok('云上城挂在位面下', byName['云上城'].parentName === '王座位面', byName['云上城'].parentName);
   ok('位面是容器', byName['王座位面'].container === true);
 }
 
@@ -201,7 +293,7 @@ console.log('\n=== 7. 真实存档（白鹭浅滩男爵领）===');
 console.log('\n=== 8. 接进渲染了吗 ===');
 {
   ok('建筑列表滤掉领地', /\.filter\(\(\{ item \}\) => !isDomainAsset\(item\)\)/.test(CORE));
-  ok('数据里带上层级字段', /parentName: d\.parent \|\| ''/.test(CORE));
+  ok('数据里带上层级字段', /parentName: d\.parentName \|\| ''/.test(CORE));
   ok('重读后锚回原来那块', /keepDomainFocus\(\)/.test(CORE));
   ok('顶栏用 depth 缩进', /margin-left:\$\{depth \* 11\}px/.test(CORE));
   ok('总览有属地一节', /section\('属 地'/.test(CORE));
