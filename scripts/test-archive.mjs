@@ -60,6 +60,8 @@ console.log('\n=== 6. 归档的条目不进常规列表 ===');
 ok('mergeStore 跳过 hidden', /if \(rec\.hidden\) continue;/.test(SRC));
 ok('restoreFromStore 过滤 hidden',
   /\.filter\(\(bn\) => !sd\.items\[bn\]\.hidden\)/.test(SRC));
+ok('restoreFromStore 只在整批丢失时复原',
+  /if \(liveNames\.size\) return out;/.test(SRC));
 
 console.log('\n=== 7. 被真删的名字会挡住新消息回流 ===');
 ok('mergeStore 读了 gone 集合', /const gone = loadDeletedNames\(d\.name\)/.test(SRC));

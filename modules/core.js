@@ -2084,6 +2084,10 @@
   const STORE_KEY = '_fiefLedgerBuildings';
   const STORE_VER = 1;
   const STORE_LS = 'fief-ledger-store-';
+  /* 建筑从变量里消失后，还能在建筑页挂几次「档案」。
+     1 = 这一轮 + 下一轮，够挡「AI 漏写一次」，又不至于让改名、统合留下的
+     旧名字永远占着列表。 */
+  const MISSING_KEEP = 1;
 
   function blankStore() { return { v: STORE_VER, chatId: '', savedAt: '', domains: {} }; }
 
@@ -2340,11 +2344,22 @@
     const store = loadStore();
     let touched = false;
     const liveNames = new Set();
+    const liveItemNames = new Set();
+
+    /* 先收齐两件事：哪些领地还在变量里，哪些建筑名这一轮还出现在任何领地名下。
+       合并是「移动、非复制」——建筑搬到上级名下之后，原地那座就该消失。
+       所以对账得先看全局，再逐块判，否则先处理的那块会把搬走的当成丢了。 */
+    for (const d of domains) {
+      if (d.fromBlock) continue;
+      liveNames.add(d.name);
+      for (const it of d.items) liveItemNames.add(it.name);
+    }
 
     for (const d of domains) {
-      if (d.fromBlock || !d.items.length) continue;
-      liveNames.add(d.name);
+      if (d.fromBlock) continue;
       let sd = store.domains[d.name];
+      /* 还没建过档、这一轮也没有建筑：不必凭空建一条空记录 */
+      if (!sd && !d.items.length) continue;
       if (!sd) {
         sd = { name: d.name, meta: {}, items: {}, firstSeen: msgIdx, lastSeen: msgIdx };
         store.domains[d.name] = sd;
@@ -2399,7 +2414,21 @@
         const rec = sd.items[bn];
         // 归档的不再出现在常规列表里（要看、要恢复，去「归档」面板）
         if (rec.hidden) continue;
+        /* 这个名字这一轮出现在别的领地名下：建筑被搬走了（合并、易主），不是丢了。
+           在原处再补一条「档案」，同一座建筑就会被读两次——后期三十几座读成八十几座
+           就是这么来的。 */
+        if (liveItemNames.has(bn)) continue;
         if (!rec.missing) { rec.missing = true; rec.missingAt = msgIdx; touched = true; }
+        /* 老存档里 missing 标了、missingAt 没标的：它早就缺了，直接按过期算，
+           别让这一批幽灵再多挂两轮 */
+        else if (rec.missingAt == null) { rec.missingAt = msgIdx - MISSING_KEEP - 1; touched = true; }
+        /**
+         * 缺了一阵子的不再占列表。
+         * 建筑名一改、一统合，旧名字就是成批消失——全部当「AI 少写一座」补回来，
+         * 后期三十几座会读成八十几座。数据仍然留在档案库（归档面板里能查、能恢复），
+         * 只是不在建筑页冒充还在。
+         */
+        if (msgIdx - (rec.missingAt == null ? msgIdx : rec.missingAt) > MISSING_KEEP) continue;
         // 仍然展示，只是打上「档案」标记：AI 少写一座，不该让这座建筑凭空消失
         d.items.push(storeItemView(d.name, rec, true, true));
       }
@@ -2408,19 +2437,33 @@
       d.items = d.items.filter((x) => !x.hidden);
     }
 
-    return { store, touched, liveNames };
+    return { store, touched, liveNames, liveItemNames };
   }
 
-  /** 变量整批丢了也能把领地读出来：从档案库复原（归档过的不要恢复回来） */
+  /**
+   * 变量整批丢了也能把领地读出来：从档案库复原（归档过的不要恢复回来）。
+   *
+   * 只在「一块地都没读到」时才复原。某一块地从变量里消失是常态——合并、
+   * 易主、拆除都会这样，那时候它的建筑正挂在别的领地名下。按丢失复原，
+   * 就是同一座建筑读两次、旧领地一直挂在列表上。
+   *
+   * 单块地丢建筑由 mergeStore 兜：还活着的领地会把缺的那几座标成「档案」补出来，
+   * 所以这里不必再管单块的情况。档案里有、变量里没有的领地，自检页会列出来。
+   */
   function restoreFromStore(store, liveNames, blocks) {
     const out = [];
+    if (liveNames.size) return out;
     for (const dn of Object.keys(store.domains)) {
-      if (liveNames.has(dn)) continue;
       const sd = store.domains[dn];
-      const items = Object.keys(sd.items)
-        .filter((bn) => !sd.items[bn].hidden)
-        .map((bn) => storeItemView(dn, sd.items[bn], true));
-      out.push({ name: dn, items, info: blocks[dn] || null, meta: sd.meta || {}, fromStore: true });
+      const keep = Object.keys(sd.items).filter((bn) => !sd.items[bn].hidden);
+      if (!keep.length) continue;
+      out.push({
+        name: dn,
+        items: keep.map((bn) => storeItemView(dn, sd.items[bn], true)),
+        info: blocks[dn] || null,
+        meta: sd.meta || {},
+        fromStore: true,
+      });
     }
     return out;
   }
@@ -7301,7 +7344,24 @@
     html += '<div class="fl-diag-h">建 筑 档 案 库</div>';
     html += row('存储位置', '<code>' + esc(STORE_KEY) + '</code>' + (vars && vars[STORE_KEY] ? yes('　已写进聊天变量') : warn('　仅本机缓存')));
     html += row('已归档', stored ? yes(stored + ' 座 / ' + Object.keys(store.domains).length + ' 块领地') : warn('还没有归档'));
-    html += row('仅存于档案', missing ? warn(missing + ' 座（变量里已无，展示按档案）') : yes('无'));
+    /* 变量里已经没有的建筑：近期缺的那几座还会在建筑页挂「档案」，
+       剩下的只留在归档面板——不然改名、统合一次就永远多出一批。 */
+    let storedGone = 0;
+    for (const dn of Object.keys(store.domains)) {
+      for (const bn of Object.keys(store.domains[dn].items || {})) {
+        if (store.domains[dn].items[bn].missing) storedGone += 1;
+      }
+    }
+    html += row('仅存于档案', storedGone
+      ? warn(storedGone + ' 座（变量里已无）　建筑页只挂近期缺的 ' + missing + ' 座，其余在归档面板')
+      : yes('无'));
+    /* 合并、易主、拆除都会让一块地从变量里消失。这些不再复原回列表，
+       但得让人知道档案里还留着，别以为是丢了。 */
+    const liveTree = new Set((data.domains || []).filter((d) => !d.fromStore).map((d) => d.name));
+    const ghostDoms = Object.keys(store.domains).filter((dn) => !liveTree.has(dn));
+    html += row('已不在变量的领地', ghostDoms.length
+      ? warn(ghostDoms.length + ' 块（' + esc(ghostDoms.slice(0, 3).join('、')) + (ghostDoms.length > 3 ? '…' : '') + '）合并/易主会这样，不再复原到列表')
+      : yes('无'));
     html += row('最近写入', store.savedAt ? esc(String(store.savedAt).replace('T', ' ').slice(0, 19)) : '—');
 
     html += '<div class="fl-diag-h">检 测 通 道</div>';
