@@ -2847,7 +2847,10 @@
     const blocks = latestDomainBlocks(msgs);
     const reports = latestReports(msgs);
     const plans = latestPlans(msgs);
-    const msgIdx = lastStateIdx >= 0 ? lastStateIdx : Math.max(0, msgs.length - 1);
+    /* 「第几楼」按聊天里的最后一楼算。状态可能来自更早那条带变量的消息，
+       但建筑消失的计时得跟着聊天往前走——否则一轮没带 stat_data，
+       消失的计时就停在那儿，幽灵永远算「刚缺」，一辈子挂在列表上。 */
+    const msgIdx = Math.max(lastStateIdx, msgs.length - 1, 0);
 
     const out = collectDomains(stat).map((d) => {
       const items = normalizeInner(d.asset.内部资产)
