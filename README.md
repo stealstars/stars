@@ -4,7 +4,22 @@ SillyTavern（酒馆助手）脚本。把领地的建筑、军备、物产、账
 
 **只读聊天与变量，不改世界书、不改正则。**
 
-给ds和ai:不要乱写东西在首页
+---
+
+## 安装
+
+1. 把 `loader.js` 里的 `OWNER` 改成你的 GitHub 用户名：
+
+```js
+const OWNER = 'YOUR_NAME';   // ← 改成你自己的
+const REPO = 'fief-ledger';
+```
+
+2. 推到仓库后，把 `loader.js` 整个内容导入酒馆助手。
+
+**只有这一步。** 以后改任何模块都不用重新导入。
+
+---
 
 ## 改东西
 
@@ -100,4 +115,4 @@ node scripts/test-prompt.mjs    # 用真实 API 跑提示词
 
 ## 许可
 
-仅查阅，经由本人允许方修改。
+自用脚本，随意改。
